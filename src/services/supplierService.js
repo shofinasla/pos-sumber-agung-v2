@@ -1,4 +1,5 @@
 import { supabase, isSupabaseConfigured } from '../lib/supabase';
+import { toSearchString } from '../utils/searchUtils';
 
 const DEMO_SUPPLIERS_KEY = 'tb_sa_demo_suppliers';
 
