@@ -1,4 +1,5 @@
 import { supabase, isSupabaseConfigured } from '../lib/supabase';
+import { toSearchString } from '../utils/searchUtils';
 
 // Local storage key for demo fallback mode
 const DEMO_CATEGORIES_KEY = 'tb_sa_demo_categories';
@@ -35,12 +36,13 @@ function saveLocalCategories(categories) {
 export const categoryService = {
   // Fetch all categories with product count
   async getCategories(search = '') {
+    const searchStr = toSearchString(search);
+    const q = searchStr.toLowerCase();
     if (!isSupabaseConfigured) {
       let categories = getLocalCategories();
-      if (search) {
-        const q = search.toLowerCase();
+      if (q) {
         categories = categories.filter(
-          (c) => c.name.toLowerCase().includes(q) || (c.description && c.description.toLowerCase().includes(q))
+          (c) => (c.name || '').toLowerCase().includes(q) || (c.description && c.description.toLowerCase().includes(q))
         );
       }
       return { data: categories, error: null };
@@ -52,8 +54,8 @@ export const categoryService = {
         .select('*, products(count)')
         .order('name', { ascending: true });
 
-      if (search) {
-        query = query.or(`name.ilike.%${search}%,description.ilike.%${search}%`);
+      if (searchStr) {
+        query = query.or(`name.ilike.%${searchStr}%,description.ilike.%${searchStr}%`);
       }
 
       const { data, error } = await query;
