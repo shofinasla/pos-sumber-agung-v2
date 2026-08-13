@@ -1,4 +1,5 @@
 import { supabase, isSupabaseConfigured } from '../lib/supabase';
+import { toSearchString } from '../utils/searchUtils';
 
 // Local storage key for demo fallback mode
 const DEMO_PRODUCTS_KEY = 'tb_sa_demo_products';
@@ -116,25 +117,30 @@ function saveLocalProducts(products) {
 
 export const productService = {
   // Fetch paginated products with filters and total count
-  async getProducts({
-    page = 1,
-    limit = 10,
-    search = '',
-    categoryId = '',
-    statusFilter = 'all', // 'all', 'active', 'inactive'
-    stockFilter = 'all',  // 'all', 'available', 'low', 'out_of_stock'
-  } = {}) {
+  async getProducts(params = {}) {
+    const options = typeof params === 'string' ? { search: params } : (params || {});
+    const {
+      page = 1,
+      limit = 10,
+      search = '',
+      categoryId = '',
+      statusFilter = 'all', // 'all', 'active', 'inactive'
+      stockFilter = 'all',  // 'all', 'available', 'low', 'out_of_stock'
+    } = options;
+
+    const cleanSearch = toSearchString(search);
+    const q = cleanSearch.toLowerCase();
+
     if (!isSupabaseConfigured) {
       let products = getLocalProducts();
 
       // Search
-      if (search) {
-        const q = search.toLowerCase();
+      if (q) {
         products = products.filter(
           (p) =>
-            p.name.toLowerCase().includes(q) ||
-            p.sku.toLowerCase().includes(q) ||
-            (p.barcode && p.barcode.toLowerCase().includes(q))
+            (p.name || '').toLowerCase().includes(q) ||
+            (p.sku || '').toLowerCase().includes(q) ||
+            (p.barcode && (p.barcode || '').toLowerCase().includes(q))
         );
       }
 
@@ -179,8 +185,7 @@ export const productService = {
         .select('*, categories(id, name)', { count: 'exact' });
 
       // Search by Name, SKU, or Barcode
-      if (search) {
-        const cleanSearch = search.trim();
+      if (cleanSearch) {
         query = query.or(`name.ilike.%${cleanSearch}%,sku.ilike.%${cleanSearch}%,barcode.ilike.%${cleanSearch}%`);
       }
 

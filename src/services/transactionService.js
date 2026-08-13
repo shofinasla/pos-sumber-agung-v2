@@ -144,6 +144,111 @@ export const transactionService = {
   },
 
   /**
+   * Mengambil daftar transaksi lengkap dengan filter
+   */
+  async getSalesHistory(filters = {}) {
+    if (!isSupabaseConfigured) {
+      let sales = getLocalSales();
+      if (filters.search) {
+        const q = filters.search.toLowerCase();
+        sales = sales.filter(
+          (s) =>
+            (s.invoice_number || '').toLowerCase().includes(q) ||
+            (s.customer?.name || '').toLowerCase().includes(q) ||
+            (s.notes || '').toLowerCase().includes(q)
+        );
+      }
+      if (filters.paymentMethod && filters.paymentMethod !== 'ALL') {
+        sales = sales.filter((s) => s.payment_method === filters.paymentMethod);
+      }
+      if (filters.status && filters.status !== 'ALL') {
+        sales = sales.filter((s) => (s.status || 'COMPLETED') === filters.status);
+      }
+      return { data: sales, error: null };
+    }
+
+    try {
+      let query = supabase
+        .from('sales')
+        .select(`
+          id,
+          invoice_number,
+          subtotal,
+          discount,
+          tax,
+          total,
+          payment_method,
+          paid_amount,
+          change_amount,
+          status,
+          notes,
+          created_at,
+          customer:customers(name, phone),
+          cashier:profiles(full_name),
+          sale_items(
+            id,
+            quantity,
+            unit_price,
+            cost_price,
+            discount,
+            subtotal,
+            product:products(name, sku, unit)
+          )
+        `)
+        .order('created_at', { ascending: false });
+
+      if (filters.paymentMethod && filters.paymentMethod !== 'ALL') {
+        query = query.eq('payment_method', filters.paymentMethod);
+      }
+      if (filters.status && filters.status !== 'ALL') {
+        query = query.eq('status', filters.status);
+      }
+      if (filters.search) {
+        const q = filters.search.trim();
+        query = query.or(`invoice_number.ilike.%${q}%,notes.ilike.%${q}%`);
+      }
+
+      const { data, error } = await query;
+      if (error) return { data: [], error };
+      return { data: data || [], error: null };
+    } catch (err) {
+      return { data: [], error: err };
+    }
+  },
+
+  /**
+   * Pembatalan Transaksi / Void
+   */
+  async voidSale(saleId, reason = 'Pembatalan Transaksi Kasir') {
+    if (!isSupabaseConfigured) {
+      const sales = getLocalSales();
+      const idx = sales.findIndex((s) => s.id === saleId);
+      if (idx !== -1) {
+        sales[idx].status = 'VOIDED';
+        sales[idx].notes = (sales[idx].notes ? sales[idx].notes + ' | ' : '') + `VOID: ${reason}`;
+        saveLocalSales(sales);
+      }
+      return { data: true, error: null };
+    }
+
+    try {
+      const { data, error } = await supabase
+        .from('sales')
+        .update({
+          status: 'VOIDED',
+          notes: `VOID: ${reason}`,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', saleId);
+
+      if (error) return { error };
+      return { data, error: null };
+    } catch (err) {
+      return { error: err };
+    }
+  },
+
+  /**
    * Mengambil daftar pelanggan untuk dropdown pilihan kasir
    */
   async getCustomers(search = '') {
