@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import {
   Settings,
   Store,
@@ -6,9 +6,17 @@ import {
   FileText,
   Save,
   CheckCircle2,
+  Database,
+  RefreshCw,
+  Zap,
 } from 'lucide-react';
 import { settingsService } from '../services/settingsService';
 import { Logo } from '../components/common/Logo';
+import { DatabaseStatusModal } from '../components/common/DatabaseStatusModal';
+import {
+  supabaseUrl,
+  testSupabaseConnection,
+} from '../lib/supabase';
 
 export const PengaturanPage = () => {
   const [settings, setSettings] = useState(() => {
@@ -26,6 +34,35 @@ export const PengaturanPage = () => {
   });
 
   const [savedSuccess, setSavedSuccess] = useState(false);
+  const [isDbModalOpen, setIsDbModalOpen] = useState(false);
+  const [dbStatus, setDbStatus] = useState(null);
+  const [testingDb, setTestingDb] = useState(false);
+
+  const checkDb = useCallback(async () => {
+    setTestingDb(true);
+    try {
+      const res = await testSupabaseConnection();
+      setDbStatus(res);
+    } catch {
+      setDbStatus({ success: false, message: 'Gagal terhubung' });
+    } finally {
+      setTestingDb(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    let isMounted = true;
+    testSupabaseConnection()
+      .then((res) => {
+        if (isMounted) setDbStatus(res);
+      })
+      .catch(() => {
+        if (isMounted) setDbStatus({ success: false, message: 'Gagal terhubung' });
+      });
+    return () => {
+      isMounted = false;
+    };
+  }, []);
 
   const handleChange = (field, value) => {
     setSettings((prev) => ({ ...prev, [field]: value }));
@@ -207,6 +244,74 @@ export const PengaturanPage = () => {
               </label>
             </div>
           </div>
+
+          {/* Database Cloud Supabase Status & Config Card */}
+          <div className="bg-white p-6 rounded-3xl border border-slate-200/80 shadow-2xs space-y-4">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+              <h3 className="font-bold text-slate-900 text-base flex items-center gap-2">
+                <Database className="w-5 h-5 text-emerald-600" />
+                Koneksi Database Cloud (Supabase)
+              </h3>
+              <span
+                className={`text-xs px-2.5 py-1 rounded-full font-bold flex items-center gap-1.5 ${
+                  dbStatus?.success
+                    ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                    : 'bg-amber-50 text-amber-700 border border-amber-200'
+                }`}
+              >
+                <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+                {dbStatus?.success ? 'Terhubung (Online)' : 'Memeriksa...'}
+              </span>
+            </div>
+
+            <div className="p-4 bg-slate-50 border border-slate-200/80 rounded-2xl space-y-3">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs">
+                <div>
+                  <span className="text-[11px] text-slate-500 block uppercase font-bold tracking-wider">
+                    Endpoint Host Database
+                  </span>
+                  <span className="font-mono font-bold text-slate-800 text-xs">
+                    {supabaseUrl ? supabaseUrl.replace('https://', '') : 'Belum diatur'}
+                  </span>
+                </div>
+                {dbStatus?.latencyMs !== null && dbStatus?.latencyMs !== undefined && (
+                  <div className="sm:text-right">
+                    <span className="text-[11px] text-slate-500 block uppercase font-bold tracking-wider">
+                      Respon Server
+                    </span>
+                    <span className="font-mono font-bold text-emerald-700 text-xs flex items-center sm:justify-end gap-1">
+                      <Zap className="w-3 h-3 text-emerald-600" />
+                      {dbStatus.latencyMs} ms
+                    </span>
+                  </div>
+                )}
+              </div>
+
+              <p className="text-xs text-slate-600">
+                {dbStatus?.message || 'Database Cloud tersambung untuk sinkronisasi otomatis seluruh data toko.'}
+              </p>
+            </div>
+
+            <div className="flex items-center justify-between pt-1">
+              <button
+                type="button"
+                onClick={checkDb}
+                disabled={testingDb}
+                className="inline-flex items-center gap-1.5 px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-semibold transition cursor-pointer"
+              >
+                <RefreshCw className={`w-3.5 h-3.5 ${testingDb ? 'animate-spin text-emerald-600' : ''}`} />
+                <span>{testingDb ? 'Menguji...' : 'Uji Koneksi'}</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setIsDbModalOpen(true)}
+                className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 rounded-xl text-xs font-bold transition cursor-pointer"
+              >
+                <span>Kelola / Kustomisasi Kredensial</span>
+              </button>
+            </div>
+          </div>
         </div>
 
         {/* Live Thermal Receipt Preview Right Column */}
@@ -316,6 +421,15 @@ export const PengaturanPage = () => {
           </div>
         </div>
       </div>
+
+      {/* Database Connection Modal */}
+      <DatabaseStatusModal
+        isOpen={isDbModalOpen}
+        onClose={() => {
+          setIsDbModalOpen(false);
+          checkDb();
+        }}
+      />
     </div>
   );
 };
