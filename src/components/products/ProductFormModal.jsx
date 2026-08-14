@@ -1,10 +1,10 @@
 import { useState } from 'react';
-import { Loader2, AlertCircle, Barcode, Package } from 'lucide-react';
+import { Loader2, AlertCircle, Barcode, Package, Camera } from 'lucide-react';
 import { Modal } from '../common/Modal';
 import { UNITS } from '../../utils/formatters';
+import { CameraScannerModal } from '../common/CameraScannerModal';
 
-export const ProductFormModal = ({
-  isOpen,
+const ProductFormInner = ({
   onClose,
   onSubmit,
   categories = [],
@@ -39,6 +39,7 @@ export const ProductFormModal = ({
     };
   });
 
+  const [isCameraOpen, setIsCameraOpen] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
   const [loading, setLoading] = useState(false);
 
@@ -46,6 +47,13 @@ export const ProductFormModal = ({
     const randomSeq = Math.floor(1000 + Math.random() * 9000);
     const prefix = formData.name ? formData.name.substring(0, 3).toUpperCase() : 'PRD';
     setFormData((prev) => ({ ...prev, sku: `${prefix}-${randomSeq}` }));
+  };
+
+  const handleBarcodeScanned = (scannedCode) => {
+    if (scannedCode) {
+      setFormData((prev) => ({ ...prev, barcode: scannedCode.trim() }));
+      setIsCameraOpen(false);
+    }
   };
 
   const handleSubmit = async (e) => {
@@ -90,12 +98,7 @@ export const ProductFormModal = ({
   };
 
   return (
-    <Modal
-      isOpen={isOpen}
-      onClose={onClose}
-      title={productToEdit ? 'Edit Data Produk Material' : 'Tambah Produk Material Baru'}
-      maxWidth="max-w-2xl"
-    >
+    <>
       <form onSubmit={handleSubmit} className="space-y-4">
         {errorMsg && (
           <div className="p-3 bg-rose-50 border border-rose-200 rounded-2xl text-rose-700 text-xs flex items-center space-x-2">
@@ -144,18 +147,37 @@ export const ProductFormModal = ({
           </div>
 
           <div>
-            <label className="block text-xs font-bold text-slate-700 mb-1">
-              Barcode / Kode Batang (Opsional)
-            </label>
-            <div className="relative">
-              <Barcode className="w-4 h-4 text-slate-400 absolute left-3 top-2.5" />
+            <div className="flex justify-between items-center mb-1">
+              <label className="block text-xs font-bold text-slate-700">
+                Barcode / Kode Batang (Opsional)
+              </label>
+              <button
+                type="button"
+                onClick={() => setIsCameraOpen(true)}
+                className="inline-flex items-center gap-1 text-[11px] text-emerald-600 hover:text-emerald-700 font-bold bg-emerald-50 hover:bg-emerald-100 px-2 py-0.5 rounded-md transition"
+              >
+                <Camera className="w-3 h-3" />
+                <span>Scan Kamera</span>
+              </button>
+            </div>
+            <div className="relative flex items-center">
+              <Barcode className="w-4 h-4 text-slate-400 absolute left-3 top-2.5 pointer-events-none" />
               <input
                 type="text"
                 placeholder="Scan / ketik barcode"
                 value={formData.barcode}
                 onChange={(e) => setFormData({ ...formData, barcode: e.target.value })}
-                className="w-full pl-9 pr-3.5 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-mono text-slate-900 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                className="w-full pl-9 pr-16 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-mono text-slate-900 focus:outline-none focus:ring-2 focus:ring-emerald-500"
               />
+              {formData.barcode && (
+                <button
+                  type="button"
+                  onClick={() => setFormData({ ...formData, barcode: '' })}
+                  className="absolute right-2 text-slate-400 hover:text-slate-600 text-xs px-1.5 py-0.5 rounded bg-slate-200 hover:bg-slate-300 font-bold"
+                >
+                  ✕
+                </button>
+              )}
             </div>
           </div>
 
@@ -292,6 +314,46 @@ export const ProductFormModal = ({
           </button>
         </div>
       </form>
+
+      {/* Camera Barcode Scanner Modal for adding/editing product barcode */}
+      <CameraScannerModal
+        isOpen={isCameraOpen}
+        onClose={() => setIsCameraOpen(false)}
+        onDetected={handleBarcodeScanned}
+        title="Scan Barcode Produk"
+        subtitle="Arahkan kamera ke barcode kemasan untuk mengisi input barcode secara otomatis"
+        allowContinuous={false}
+        defaultContinuous={false}
+      />
+    </>
+  );
+};
+
+export const ProductFormModal = ({
+  isOpen,
+  onClose,
+  onSubmit,
+  categories = [],
+  productToEdit = null,
+}) => {
+  return (
+    <Modal
+      isOpen={isOpen}
+      onClose={onClose}
+      title={productToEdit ? 'Edit Data Produk Material' : 'Tambah Produk Material Baru'}
+      maxWidth="max-w-2xl"
+    >
+      {isOpen && (
+        <ProductFormInner
+          key={productToEdit?.id || 'new'}
+          onClose={onClose}
+          onSubmit={onSubmit}
+          categories={categories}
+          productToEdit={productToEdit}
+        />
+      )}
     </Modal>
   );
 };
+
+export default ProductFormModal;

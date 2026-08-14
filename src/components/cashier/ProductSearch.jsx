@@ -91,21 +91,25 @@ export const ProductSearch = () => {
   // Callback saat kamera mendeteksi barcode
   const handleCameraDetected = useCallback(
     async (barcode) => {
-      setIsCameraOpen(false);
+      const term = (barcode || '').trim();
+      if (!term) return;
+
       const { data } = await productService.getProducts({
-        search: barcode,
+        search: term,
         statusFilter: 'active',
-        limit: 5,
+        limit: 10,
       });
 
       if (data && data.length > 0) {
         const exactMatch = data.find(
-          (p) => p.barcode?.toLowerCase() === barcode.toLowerCase()
+          (p) =>
+            p.barcode?.toLowerCase() === term.toLowerCase() ||
+            p.sku?.toLowerCase() === term.toLowerCase()
         );
         const target = exactMatch || data[0];
         addToCart(target, 1);
       } else {
-        showToast(`Produk dengan barcode ${barcode} tidak ditemukan.`, 'error');
+        showToast(`Produk dengan barcode "${term}" belum terdaftar di toko.`, 'error');
       }
     },
     [addToCart, showToast]

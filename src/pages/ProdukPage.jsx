@@ -9,6 +9,7 @@ import {
   Power,
   Edit2,
   Filter,
+  Camera,
 } from 'lucide-react';
 import { useProducts } from '../hooks/useProducts';
 import { useCategories } from '../hooks/useCategories';
@@ -19,6 +20,7 @@ import { ProductImportModal } from '../components/products/ProductImportModal';
 import { ProductCardMobile } from '../components/products/ProductCardMobile';
 import { ConfirmModal } from '../components/common/ConfirmModal';
 import { Pagination } from '../components/common/Pagination';
+import { CameraScannerModal } from '../components/common/CameraScannerModal';
 
 export function ProdukPage() {
   const {
@@ -48,6 +50,7 @@ export function ProdukPage() {
   const [selectedProduct, setSelectedProduct] = useState(null);
 
   const [isImportOpen, setIsImportOpen] = useState(false);
+  const [isSearchScannerOpen, setIsSearchScannerOpen] = useState(false);
 
   const [isToggleModalOpen, setIsToggleModalOpen] = useState(false);
   const [productToToggle, setProductToToggle] = useState(null);
@@ -171,16 +174,37 @@ export function ProdukPage() {
 
       {/* Filter & Search Bar */}
       <div className="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-2xs space-y-3">
-        {/* Search Input */}
-        <div className="relative w-full">
-          <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-3" />
-          <input
-            type="text"
-            placeholder="Cari berdasarkan nama produk, SKU, atau scan barcode..."
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            className="w-full pl-9 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium text-slate-900 focus:outline-none focus:ring-2 focus:ring-emerald-500"
-          />
+        {/* Search Input with Camera Barcode Scanner */}
+        <div className="flex items-center gap-2">
+          <div className="relative flex-1">
+            <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-3" />
+            <input
+              type="text"
+              placeholder="Cari berdasarkan nama produk, SKU, atau scan barcode..."
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="w-full pl-9 pr-10 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium text-slate-900 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+            />
+            {search && (
+              <button
+                type="button"
+                onClick={() => setSearch('')}
+                className="absolute right-3 top-2.5 text-slate-400 hover:text-slate-600 text-xs font-bold bg-slate-200 hover:bg-slate-300 rounded-full w-4 h-4 flex items-center justify-center"
+              >
+                ✕
+              </button>
+            )}
+          </div>
+
+          <button
+            type="button"
+            onClick={() => setIsSearchScannerOpen(true)}
+            title="Scan barcode produk untuk mencari di tabel stok"
+            className="px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold rounded-xl flex items-center gap-1.5 transition cursor-pointer shrink-0"
+          >
+            <Camera className="w-4 h-4 text-emerald-600" />
+            <span className="hidden sm:inline">Scan Barcode</span>
+          </button>
         </div>
 
         {/* Filters Grid */}
@@ -462,6 +486,23 @@ export function ProdukPage() {
         }
         isDanger={productToToggle?.is_active}
         loading={toggleLoading}
+      />
+
+      {/* Camera Barcode Scanner Modal for Searching Products in Table */}
+      <CameraScannerModal
+        isOpen={isSearchScannerOpen}
+        onClose={() => setIsSearchScannerOpen(false)}
+        onDetected={(scannedBarcode) => {
+          if (scannedBarcode) {
+            setSearch(scannedBarcode.trim());
+            setPage(1);
+            showToast(`Mencari produk dengan barcode: ${scannedBarcode}`, 'info');
+          }
+        }}
+        title="Cari Produk via Scan Barcode"
+        subtitle="Arahkan kamera ke barcode produk untuk mencari datanya di daftar stok"
+        allowContinuous={false}
+        defaultContinuous={false}
       />
     </div>
   );
