@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import {
   ShoppingCart,
   Plus,
@@ -10,84 +10,216 @@ import {
   Clock,
   Eye,
   RefreshCw,
+  Sparkles,
+  Printer,
+  ChevronDown,
 } from 'lucide-react';
 import { purchaseService } from '../services/purchaseService';
 import { supplierService } from '../services/supplierService';
 import { productService } from '../services/productService';
+import { categoryService } from '../services/categoryService';
 import { Modal } from '../components/common/Modal';
+import { ProductPickerModal } from '../components/purchases/ProductPickerModal';
+import { QuickProductModal } from '../components/purchases/QuickProductModal';
+import { formatRupiah, formatDate } from '../utils/formatters';
 
 export const PembelianPage = () => {
   const [purchases, setPurchases] = useState([]);
   const [suppliers, setSuppliers] = useState([]);
   const [products, setProducts] = useState([]);
+  const [categories, setCategories] = useState([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
+  const [filterPayment, setFilterPayment] = useState('ALL'); // 'ALL', 'PAID', 'UNPAID'
 
-  // New Purchase Modal State
+  // Create Purchase Modal State
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [selectedSupplierId, setSelectedSupplierId] = useState('');
   const [purchaseNumber, setPurchaseNumber] = useState('');
   const [paymentStatus, setPaymentStatus] = useState('PAID');
   const [dueDate, setDueDate] = useState('');
-  const [items, setItems] = useState([
-    { productId: '', productName: '', quantity: 1, unitCost: 0 },
-  ]);
+  const [items, setItems] = useState([]);
   const [submitting, setSubmitting] = useState(false);
+
+  // Sub-Modals for Product Selection & Quick Create
+  const [isPickerOpen, setIsPickerOpen] = useState(false);
+  const [isQuickCreateOpen, setIsQuickCreateOpen] = useState(false);
+  const [activeRowIndexToPick, setActiveRowIndexToPick] = useState(null);
 
   // Detail Modal State
   const [detailPurchase, setDetailPurchase] = useState(null);
 
   const fetchData = useCallback(async () => {
     setLoading(true);
-    const [purRes, supRes, prodRes] = await Promise.all([
+    const [purRes, supRes, prodRes, catRes] = await Promise.all([
       purchaseService.getPurchases({ search }),
       supplierService.getSuppliers(),
-      productService.getProducts(''),
+      productService.getProducts({ limit: 1000, statusFilter: 'all' }),
+      categoryService.getCategories(),
     ]);
+
     setPurchases(purRes.data || []);
     setSuppliers(supRes.data || []);
     setProducts(prodRes.data || []);
+    setCategories(catRes.data || []);
     setLoading(false);
   }, [search]);
 
   useEffect(() => {
     let isMounted = true;
     const load = async () => {
-      const [purRes, supRes, prodRes] = await Promise.all([
+      const [purRes, supRes, prodRes, catRes] = await Promise.all([
         purchaseService.getPurchases({ search }),
         supplierService.getSuppliers(),
-        productService.getProducts(''),
+        productService.getProducts({ limit: 1000, statusFilter: 'all' }),
+        categoryService.getCategories(),
       ]);
       if (isMounted) {
         setPurchases(purRes.data || []);
         setSuppliers(supRes.data || []);
         setProducts(prodRes.data || []);
+        setCategories(catRes.data || []);
         setLoading(false);
       }
     };
     load();
-    return () => { isMounted = false; };
+    return () => {
+      isMounted = false;
+    };
   }, [search]);
+
+  // Low stock products calculation for one-click restock
+  const lowStockProducts = useMemo(() => {
+    return products.filter((p) => Number(p.stock || 0) <= Number(p.minimum_stock || 5));
+  }, [products]);
 
   const handleOpenCreateModal = () => {
     setSelectedSupplierId(suppliers[0]?.id || '');
-    setPurchaseNumber(`PO-${Date.now().toString().slice(-6)}`);
+    setPurchaseNumber(`PO-${new Date().toISOString().slice(0, 10).replace(/-/g, '')}-${Math.floor(1000 + Math.random() * 9000)}`);
     setPaymentStatus('PAID');
     setDueDate('');
-    setItems([{ productId: products[0]?.id || '', productName: products[0]?.name || '', quantity: 1, unitCost: products[0]?.cost_price || 0 }]);
+
+    if (products.length > 0) {
+      const first = products[0];
+      setItems([
+        {
+          productId: first.id,
+          productName: first.name,
+          sku: first.sku,
+          unit: first.unit || 'PCS',
+          currentStock: Number(first.stock || 0),
+          sellingPrice: Number(first.selling_price || 0),
+          quantity: 10,
+          unitCost: Number(first.cost_price || 0),
+        },
+      ]);
+    } else {
+      setItems([]);
+    }
+
     setIsCreateModalOpen(true);
   };
 
-  const handleProductChange = (index, prodId) => {
-    const prod = products.find((p) => p.id === prodId);
-    const newItems = [...items];
-    newItems[index] = {
-      ...newItems[index],
-      productId: prodId,
-      productName: prod ? prod.name : '',
-      unitCost: prod ? (prod.cost_price || 0) : 0,
-    };
-    setItems(newItems);
+  // Open product picker for specific row or general add
+  const handleOpenProductPicker = (rowIndex = null) => {
+    setActiveRowIndexToPick(rowIndex);
+    setIsPickerOpen(true);
+  };
+
+  // When a product is selected from Picker
+  const handleProductSelectedFromPicker = (product) => {
+    if (activeRowIndexToPick !== null && items[activeRowIndexToPick]) {
+      // Replace existing row
+      const newItems = [...items];
+      newItems[activeRowIndexToPick] = {
+        ...newItems[activeRowIndexToPick],
+        productId: product.id,
+        productName: product.name,
+        sku: product.sku,
+        unit: product.unit || 'PCS',
+        currentStock: Number(product.stock || 0),
+        sellingPrice: Number(product.selling_price || 0),
+        unitCost: Number(product.cost_price || 0),
+      };
+      setItems(newItems);
+    } else {
+      // Append new row
+      setItems((prev) => [
+        ...prev,
+        {
+          productId: product.id,
+          productName: product.name,
+          sku: product.sku,
+          unit: product.unit || 'PCS',
+          currentStock: Number(product.stock || 0),
+          sellingPrice: Number(product.selling_price || 0),
+          quantity: 10,
+          unitCost: Number(product.cost_price || 0),
+        },
+      ]);
+    }
+  };
+
+  // When multiple products are selected at once from Picker
+  const handleMultipleProductsSelected = (selectedList) => {
+    const newRows = selectedList.map(({ product, quantity, unitCost }) => ({
+      productId: product.id,
+      productName: product.name,
+      sku: product.sku,
+      unit: product.unit || 'PCS',
+      currentStock: Number(product.stock || 0),
+      sellingPrice: Number(product.selling_price || 0),
+      quantity: quantity || 10,
+      unitCost: unitCost || product.cost_price || 0,
+    }));
+
+    // Filter out duplicate productIds already in items
+    const existingIds = new Set(items.map((it) => it.productId));
+    const nonDuplicates = newRows.filter((row) => !existingIds.has(row.productId));
+
+    setItems((prev) => [...prev, ...nonDuplicates]);
+  };
+
+  // One-click add all low stock items
+  const handleAutoPopulateLowStock = () => {
+    if (lowStockProducts.length === 0) {
+      alert('Semua stok material dalam kondisi aman! Tidak ada stok kritis saat ini.');
+      return;
+    }
+
+    const restockItems = lowStockProducts.map((p) => {
+      const neededQty = Math.max(10, (p.minimum_stock || 10) * 2 - Number(p.stock || 0));
+      return {
+        productId: p.id,
+        productName: p.name,
+        sku: p.sku,
+        unit: p.unit || 'PCS',
+        currentStock: Number(p.stock || 0),
+        sellingPrice: Number(p.selling_price || 0),
+        quantity: neededQty,
+        unitCost: Number(p.cost_price || 0),
+      };
+    });
+
+    setItems(restockItems);
+  };
+
+  // When a newly created product is saved
+  const handleProductCreatedQuickly = (newProd) => {
+    setProducts((prev) => [newProd, ...prev]);
+    setItems((prev) => [
+      ...prev,
+      {
+        productId: newProd.id,
+        productName: newProd.name,
+        sku: newProd.sku,
+        unit: newProd.unit || 'PCS',
+        currentStock: 0,
+        sellingPrice: Number(newProd.selling_price || 0),
+        quantity: 10,
+        unitCost: Number(newProd.cost_price || 0),
+      },
+    ]);
   };
 
   const handleItemChange = (index, field, value) => {
@@ -96,21 +228,22 @@ export const PembelianPage = () => {
     setItems(newItems);
   };
 
-  const handleAddItem = () => {
-    const firstProd = products[0];
-    setItems([
-      ...items,
-      {
-        productId: firstProd?.id || '',
-        productName: firstProd?.name || '',
-        quantity: 1,
-        unitCost: firstProd?.cost_price || 0,
-      },
-    ]);
-  };
-
   const handleRemoveItem = (index) => {
-    if (items.length === 1) return;
+    if (items.length === 1) {
+      setItems([
+        {
+          productId: '',
+          productName: '',
+          sku: '',
+          unit: 'PCS',
+          currentStock: 0,
+          sellingPrice: 0,
+          quantity: 1,
+          unitCost: 0,
+        },
+      ]);
+      return;
+    }
     setItems(items.filter((_, i) => i !== index));
   };
 
@@ -120,8 +253,11 @@ export const PembelianPage = () => {
 
   const handleSubmitPurchase = async (e) => {
     e.preventDefault();
-    if (items.some((it) => !it.productId || Number(it.quantity) <= 0)) {
-      alert('Pilih produk dan pastikan jumlah stok lebih dari 0.');
+
+    const validItems = items.filter((it) => it.productId && Number(it.quantity) > 0);
+
+    if (validItems.length === 0) {
+      alert('Pilih minimal 1 material/produk dan pastikan jumlah kulakan lebih dari 0.');
       return;
     }
 
@@ -134,7 +270,7 @@ export const PembelianPage = () => {
       purchaseNumber,
       paymentStatus,
       dueDate: paymentStatus === 'UNPAID' ? dueDate : null,
-      items,
+      items: validItems,
     };
 
     const { error } = await purchaseService.createPurchase(payload);
@@ -148,42 +284,52 @@ export const PembelianPage = () => {
     }
   };
 
-  const formatRupiah = (val) => {
-    return new Intl.NumberFormat('id-ID', {
-      style: 'currency',
-      currency: 'IDR',
-      maximumFractionDigits: 0,
-    }).format(val || 0);
-  };
+  const filteredPurchases = useMemo(() => {
+    return purchases.filter((p) => {
+      if (filterPayment !== 'ALL' && p.payment_status !== filterPayment) return false;
+      return true;
+    });
+  }, [purchases, filterPayment]);
+
+  const totalExpenditure = useMemo(() => {
+    return purchases.reduce((acc, p) => acc + Number(p.total_amount || 0), 0);
+  }, [purchases]);
+
+  const unpaidPurchases = useMemo(() => {
+    return purchases.filter((p) => p.payment_status === 'UNPAID');
+  }, [purchases]);
 
   return (
     <div className="space-y-6">
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-slate-900 tracking-tight flex items-center gap-2">
+          <h1 className="text-2xl font-bold text-slate-900 tracking-tight flex items-center gap-2.5">
             <ShoppingCart className="w-7 h-7 text-sky-600" />
             Pembelian & Kulakan Stok
           </h1>
           <p className="text-sm text-slate-500 mt-1">
-            Pencatatan faktur masuk dari supplier, penambahan stok barang, dan pembaruan HPP modal.
+            Faktur masuk dari distributor, kulakan barang toko bangunan, otomatis tambah stok & update HPP modal.
           </p>
         </div>
-        <button
-          onClick={handleOpenCreateModal}
-          className="inline-flex items-center justify-center gap-2 bg-sky-600 hover:bg-sky-700 text-white font-semibold px-4 py-2.5 rounded-2xl transition shadow-xs text-sm"
-        >
-          <Plus className="w-4 h-4" />
-          Tambah Faktur Pembelian
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={handleOpenCreateModal}
+            className="inline-flex items-center justify-center gap-2 bg-sky-600 hover:bg-sky-700 text-white font-bold px-4 py-2.5 rounded-2xl transition shadow-xs text-sm"
+          >
+            <Plus className="w-4 h-4" />
+            + Input Faktur Kulakan
+          </button>
+        </div>
       </div>
 
       {/* Summary Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         <div className="bg-white p-5 rounded-3xl border border-slate-200/80 shadow-2xs flex items-center justify-between">
           <div>
-            <p className="text-xs text-slate-500 font-semibold">Total Faktur Kulakan</p>
+            <p className="text-xs text-slate-500 font-semibold">Total Faktur Pembelian</p>
             <h3 className="text-2xl font-bold text-slate-900 mt-1">{purchases.length} Transaksi</h3>
+            <span className="text-[11px] text-slate-400 font-medium">Dari seluruh distributor rekanan</span>
           </div>
           <div className="w-12 h-12 bg-sky-50 text-sky-600 rounded-2xl flex items-center justify-center">
             <FileText className="w-6 h-6" />
@@ -194,8 +340,9 @@ export const PembelianPage = () => {
           <div>
             <p className="text-xs text-slate-500 font-semibold">Total Pengeluaran Kulakan</p>
             <h3 className="text-2xl font-bold text-emerald-600 mt-1">
-              {formatRupiah(purchases.reduce((acc, p) => acc + Number(p.total_amount || 0), 0))}
+              {formatRupiah(totalExpenditure)}
             </h3>
+            <span className="text-[11px] text-slate-400 font-medium">Akumulasi modal belanja material</span>
           </div>
           <div className="w-12 h-12 bg-emerald-50 text-emerald-600 rounded-2xl flex items-center justify-center">
             <DollarSign className="w-6 h-6" />
@@ -204,10 +351,13 @@ export const PembelianPage = () => {
 
         <div className="bg-white p-5 rounded-3xl border border-slate-200/80 shadow-2xs flex items-center justify-between">
           <div>
-            <p className="text-xs text-slate-500 font-semibold">Kulakan Belum Lunas (Hutang)</p>
+            <p className="text-xs text-slate-500 font-semibold">Faktur Belum Lunas (Tempo)</p>
             <h3 className="text-2xl font-bold text-amber-600 mt-1">
-              {purchases.filter((p) => p.payment_status === 'UNPAID').length} Faktur
+              {unpaidPurchases.length} Faktur
             </h3>
+            <span className="text-[11px] text-slate-400 font-medium">
+              Total Hutang: {formatRupiah(unpaidPurchases.reduce((sum, p) => sum + Number(p.total_amount || 0), 0))}
+            </span>
           </div>
           <div className="w-12 h-12 bg-amber-50 text-amber-600 rounded-2xl flex items-center justify-center">
             <Clock className="w-6 h-6" />
@@ -215,22 +365,58 @@ export const PembelianPage = () => {
         </div>
       </div>
 
-      {/* Search & Actions */}
+      {/* Search & Status Filters */}
       <div className="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-2xs flex flex-col sm:flex-row items-center justify-between gap-4">
-        <div className="relative w-full sm:w-96">
-          <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
-          <input
-            type="text"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder="Cari No. Faktur / Supplier..."
-            className="w-full pl-10 pr-4 py-2 bg-slate-50 rounded-xl text-sm border border-slate-200 focus:outline-none focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500"
-          />
+        <div className="flex flex-col sm:flex-row items-center gap-3 w-full sm:w-auto flex-1">
+          <div className="relative w-full sm:w-80">
+            <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
+            <input
+              type="text"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Cari No. Faktur / Supplier..."
+              className="w-full pl-10 pr-4 py-2 bg-slate-50 rounded-xl text-sm border border-slate-200 focus:outline-none focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500"
+            />
+          </div>
+
+          <div className="flex items-center gap-1.5 w-full sm:w-auto">
+            <button
+              onClick={() => setFilterPayment('ALL')}
+              className={`px-3 py-1.5 text-xs font-semibold rounded-xl transition ${
+                filterPayment === 'ALL'
+                  ? 'bg-slate-900 text-white'
+                  : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+              }`}
+            >
+              Semua
+            </button>
+            <button
+              onClick={() => setFilterPayment('PAID')}
+              className={`px-3 py-1.5 text-xs font-semibold rounded-xl transition ${
+                filterPayment === 'PAID'
+                  ? 'bg-emerald-600 text-white'
+                  : 'bg-emerald-50 text-emerald-700 hover:bg-emerald-100'
+              }`}
+            >
+              Lunas
+            </button>
+            <button
+              onClick={() => setFilterPayment('UNPAID')}
+              className={`px-3 py-1.5 text-xs font-semibold rounded-xl transition ${
+                filterPayment === 'UNPAID'
+                  ? 'bg-amber-600 text-white'
+                  : 'bg-amber-50 text-amber-700 hover:bg-amber-100'
+              }`}
+            >
+              Hutang Tagihan
+            </button>
+          </div>
         </div>
+
         <button
           onClick={fetchData}
-          className="p-2 text-slate-500 hover:text-sky-600 hover:bg-sky-50 rounded-xl transition"
-          title="Refresh Data"
+          className="p-2 text-slate-500 hover:text-sky-600 hover:bg-sky-50 rounded-xl transition self-end sm:self-center"
+          title="Segarkan Data"
         >
           <RefreshCw className={`w-5 h-5 ${loading ? 'animate-spin' : ''}`} />
         </button>
@@ -239,13 +425,13 @@ export const PembelianPage = () => {
       {/* Purchases Table */}
       <div className="bg-white rounded-3xl border border-slate-200/80 shadow-2xs overflow-hidden">
         {loading ? (
-          <div className="p-12 text-center text-slate-500">Memuat riwayat pembelian...</div>
-        ) : purchases.length === 0 ? (
+          <div className="p-12 text-center text-slate-500">Memuat riwayat faktur pembelian...</div>
+        ) : filteredPurchases.length === 0 ? (
           <div className="p-12 text-center space-y-3">
             <ShoppingCart className="w-12 h-12 text-slate-300 mx-auto" />
-            <h3 className="text-base font-semibold text-slate-800">Belum ada transaksi pembelian</h3>
+            <h3 className="text-base font-semibold text-slate-800">Tidak ada riwayat faktur pembelian</h3>
             <p className="text-xs text-slate-500 max-w-sm mx-auto">
-              Klik "Tambah Faktur Pembelian" di atas untuk mencatat barang masuk dari supplier.
+              Klik "+ Input Faktur Kulakan" untuk mencatat barang masuk dari distributor supplier.
             </p>
           </div>
         ) : (
@@ -253,32 +439,28 @@ export const PembelianPage = () => {
             <table className="w-full text-left text-sm text-slate-600">
               <thead className="bg-slate-50 text-xs uppercase font-semibold text-slate-500 border-b border-slate-200">
                 <tr>
-                  <th className="px-6 py-4">No. Faktur</th>
-                  <th className="px-6 py-4">Supplier</th>
-                  <th className="px-6 py-4">Tanggal</th>
+                  <th className="px-6 py-4">No. Faktur / PO</th>
+                  <th className="px-6 py-4">Distributor / Supplier</th>
+                  <th className="px-6 py-4">Tanggal Masuk</th>
                   <th className="px-6 py-4">Total Pembelian</th>
                   <th className="px-6 py-4">Status Pembayaran</th>
                   <th className="px-6 py-4 text-right">Aksi</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
-                {purchases.map((pur) => (
+                {filteredPurchases.map((pur) => (
                   <tr key={pur.id} className="hover:bg-slate-50/80 transition">
-                    <td className="px-6 py-4 font-semibold text-slate-900 flex items-center gap-2">
-                      <FileText className="w-4 h-4 text-sky-600" />
-                      {pur.purchase_number}
+                    <td className="px-6 py-4 font-semibold text-slate-900">
+                      <div className="flex items-center gap-2">
+                        <FileText className="w-4 h-4 text-sky-600 shrink-0" />
+                        <span className="font-mono">{pur.purchase_number}</span>
+                      </div>
                     </td>
                     <td className="px-6 py-4">
                       <span className="font-medium text-slate-800">{pur.supplier_name}</span>
                     </td>
                     <td className="px-6 py-4 text-xs text-slate-500">
-                      {new Date(pur.created_at).toLocaleDateString('id-ID', {
-                        day: 'numeric',
-                        month: 'short',
-                        year: 'numeric',
-                        hour: '2-digit',
-                        minute: '2-digit',
-                      })}
+                      {formatDate(pur.created_at)}
                     </td>
                     <td className="px-6 py-4 font-bold text-slate-900">
                       {formatRupiah(pur.total_amount)}
@@ -299,10 +481,10 @@ export const PembelianPage = () => {
                     <td className="px-6 py-4 text-right">
                       <button
                         onClick={() => setDetailPurchase(pur)}
-                        className="inline-flex items-center gap-1 px-3 py-1.5 bg-slate-100 hover:bg-sky-50 hover:text-sky-600 text-slate-700 font-medium text-xs rounded-xl transition"
+                        className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-slate-100 hover:bg-sky-50 hover:text-sky-600 text-slate-700 font-medium text-xs rounded-xl transition"
                       >
                         <Eye className="w-3.5 h-3.5" />
-                        Detail Items
+                        Detail Faktur
                       </button>
                     </td>
                   </tr>
@@ -313,14 +495,16 @@ export const PembelianPage = () => {
         )}
       </div>
 
-      {/* Create Purchase Modal */}
+      {/* CREATE PURCHASE INVOICE MODAL */}
       <Modal
         isOpen={isCreateModalOpen}
         onClose={() => setIsCreateModalOpen(false)}
-        title="Input Faktur Pembelian Supplier (Kulakan)"
+        title="Input Faktur Pembelian & Kulakan Stok"
+        size="xl"
       >
         <form onSubmit={handleSubmitPurchase} className="space-y-4">
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          {/* Header Info: Supplier & Invoice Number */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5 p-4 bg-slate-50 rounded-2xl border border-slate-200">
             <div>
               <label className="block text-xs font-semibold text-slate-700 mb-1">
                 Distributor / Supplier *
@@ -328,12 +512,12 @@ export const PembelianPage = () => {
               <select
                 value={selectedSupplierId}
                 onChange={(e) => setSelectedSupplierId(e.target.value)}
-                className="w-full px-3.5 py-2.5 bg-slate-50 rounded-xl text-sm border border-slate-200 focus:outline-none focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500"
+                className="w-full px-3 py-2 bg-white rounded-xl text-sm border border-slate-200 focus:outline-none focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500"
               >
-                <option value="">-- Pilih Supplier --</option>
+                <option value="">-- Pilih Supplier Rekanan --</option>
                 {suppliers.map((s) => (
                   <option key={s.id} value={s.id}>
-                    {s.name}
+                    {s.name} {s.phone ? `(${s.phone})` : ''}
                   </option>
                 ))}
               </select>
@@ -341,20 +525,18 @@ export const PembelianPage = () => {
 
             <div>
               <label className="block text-xs font-semibold text-slate-700 mb-1">
-                Nomor Faktur / PO *
+                Nomor Faktur / No. PO *
               </label>
               <input
                 type="text"
                 required
                 value={purchaseNumber}
                 onChange={(e) => setPurchaseNumber(e.target.value)}
-                placeholder="PO-2026-001"
-                className="w-full px-3.5 py-2.5 bg-slate-50 rounded-xl text-sm border border-slate-200 focus:outline-none focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500 font-mono"
+                placeholder="PO-20260814-001"
+                className="w-full px-3 py-2 bg-white rounded-xl text-sm border border-slate-200 focus:outline-none focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500 font-mono"
               />
             </div>
-          </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
               <label className="block text-xs font-semibold text-slate-700 mb-1">
                 Status Pembayaran *
@@ -362,7 +544,7 @@ export const PembelianPage = () => {
               <select
                 value={paymentStatus}
                 onChange={(e) => setPaymentStatus(e.target.value)}
-                className="w-full px-3.5 py-2.5 bg-slate-50 rounded-xl text-sm border border-slate-200 focus:outline-none focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500"
+                className="w-full px-3 py-2 bg-white rounded-xl text-sm border border-slate-200 focus:outline-none focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500"
               >
                 <option value="PAID">Lunas (Tunai / Transfer Direct)</option>
                 <option value="UNPAID">Hutang (Tempo Tagihan Supplier)</option>
@@ -372,111 +554,171 @@ export const PembelianPage = () => {
             {paymentStatus === 'UNPAID' && (
               <div>
                 <label className="block text-xs font-semibold text-slate-700 mb-1">
-                  Tanggal Jatuh Tempo Pembayaran
+                  Jatuh Tempo Pembayaran Tagihan *
                 </label>
                 <input
                   type="date"
                   required
                   value={dueDate}
                   onChange={(e) => setDueDate(e.target.value)}
-                  className="w-full px-3.5 py-2.5 bg-slate-50 rounded-xl text-sm border border-slate-200 focus:outline-none focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500"
+                  className="w-full px-3 py-2 bg-white rounded-xl text-sm border border-slate-200 focus:outline-none focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500"
                 />
               </div>
             )}
           </div>
 
-          {/* Items Section */}
-          <div className="space-y-3 pt-2">
-            <div className="flex items-center justify-between">
-              <h4 className="text-xs font-bold uppercase tracking-wider text-slate-700">
-                Item Material Kulakan
-              </h4>
+          {/* Action Toolbar for Product Selection */}
+          <div className="flex flex-wrap items-center justify-between gap-2 pt-2">
+            <div className="flex items-center gap-2">
               <button
                 type="button"
-                onClick={handleAddItem}
-                className="inline-flex items-center gap-1 text-xs font-semibold text-sky-600 hover:text-sky-700"
+                onClick={() => handleOpenProductPicker(null)}
+                className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-sky-600 hover:bg-sky-700 text-white rounded-xl text-xs font-bold transition shadow-xs"
+              >
+                <Search className="w-3.5 h-3.5" />
+                Pilih dari Katalog Material ({products.length} Produk)
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setIsQuickCreateOpen(true)}
+                className="inline-flex items-center gap-1 px-3 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-semibold transition"
               >
                 <Plus className="w-3.5 h-3.5" />
-                Tambah Barang
+                + Buat Produk Baru
               </button>
             </div>
 
-            <div className="space-y-2 max-h-60 overflow-y-auto pr-1">
-              {items.map((item, idx) => (
-                <div
-                  key={idx}
-                  className="p-3 bg-slate-50 rounded-2xl border border-slate-200 grid grid-cols-1 sm:grid-cols-12 gap-2 items-center"
-                >
-                  <div className="sm:col-span-5">
-                    <label className="block text-[10px] text-slate-500 font-semibold mb-0.5 sm:hidden">
-                      Produk
-                    </label>
-                    <select
-                      value={item.productId}
-                      onChange={(e) => handleProductChange(idx, e.target.value)}
-                      className="w-full px-2.5 py-1.5 bg-white rounded-lg text-xs border border-slate-200 focus:outline-none"
-                    >
-                      <option value="">-- Pilih Produk --</option>
-                      {products.map((p) => (
-                        <option key={p.id} value={p.id}>
-                          {p.name} (Stok: {p.stock} {p.unit || 'pcs'})
-                        </option>
-                      ))}
-                    </select>
-                  </div>
+            {lowStockProducts.length > 0 && (
+              <button
+                type="button"
+                onClick={handleAutoPopulateLowStock}
+                className="inline-flex items-center gap-1.5 px-3 py-2 bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-200 rounded-xl text-xs font-bold transition"
+              >
+                <Sparkles className="w-3.5 h-3.5 text-amber-600" />
+                Kulakan ({lowStockProducts.length}) Stok Kritis
+              </button>
+            )}
+          </div>
 
-                  <div className="sm:col-span-3">
-                    <label className="block text-[10px] text-slate-500 font-semibold mb-0.5 sm:hidden">
-                      Jumlah Kulakan
-                    </label>
-                    <input
-                      type="number"
-                      min="1"
-                      value={item.quantity}
-                      onChange={(e) => handleItemChange(idx, 'quantity', Number(e.target.value))}
-                      placeholder="Qty"
-                      className="w-full px-2.5 py-1.5 bg-white rounded-lg text-xs border border-slate-200 focus:outline-none"
-                    />
-                  </div>
+          {/* Table Items */}
+          <div className="space-y-2.5">
+            <div className="flex items-center justify-between text-xs font-bold text-slate-700 uppercase tracking-wider px-1">
+              <span>Daftar Material Kulakan ({items.length} Item)</span>
+              <button
+                type="button"
+                onClick={() => handleOpenProductPicker(null)}
+                className="text-sky-600 hover:text-sky-700 font-semibold normal-case flex items-center gap-1"
+              >
+                <Plus className="w-3.5 h-3.5" />
+                Tambah Baris
+              </button>
+            </div>
 
-                  <div className="sm:col-span-3">
-                    <label className="block text-[10px] text-slate-500 font-semibold mb-0.5 sm:hidden">
-                      Harga Beli / Unit (Rp)
-                    </label>
-                    <input
-                      type="number"
-                      min="0"
-                      value={item.unitCost}
-                      onChange={(e) => handleItemChange(idx, 'unitCost', Number(e.target.value))}
-                      placeholder="Harga Modal"
-                      className="w-full px-2.5 py-1.5 bg-white rounded-lg text-xs border border-slate-200 focus:outline-none"
-                    />
-                  </div>
+            <div className="space-y-2 max-h-72 overflow-y-auto pr-1">
+              {items.map((item, idx) => {
+                const subtotal = Number(item.quantity || 0) * Number(item.unitCost || 0);
 
-                  <div className="sm:col-span-1 flex justify-end">
-                    <button
-                      type="button"
-                      onClick={() => handleRemoveItem(idx)}
-                      disabled={items.length === 1}
-                      className="p-1.5 text-slate-400 hover:text-rose-600 disabled:opacity-30"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </button>
+                return (
+                  <div
+                    key={idx}
+                    className="p-3 bg-slate-50 rounded-2xl border border-slate-200 grid grid-cols-1 sm:grid-cols-12 gap-2.5 items-center"
+                  >
+                    {/* Product Selection Button / Card */}
+                    <div className="sm:col-span-5">
+                      <label className="block text-[10px] text-slate-500 font-semibold mb-0.5 sm:hidden">
+                        Material Produk
+                      </label>
+                      <button
+                        type="button"
+                        onClick={() => handleOpenProductPicker(idx)}
+                        className="w-full text-left px-3 py-2 bg-white rounded-xl text-xs border border-slate-200 hover:border-sky-500 transition flex items-center justify-between gap-2"
+                      >
+                        <div className="min-w-0">
+                          <p className="font-bold text-slate-900 truncate">
+                            {item.productName || '-- Klik untuk Pilih Produk --'}
+                          </p>
+                          <p className="text-[10px] text-slate-500 font-mono mt-0.5">
+                            {item.sku ? `SKU: ${item.sku}` : ''} | Stok: {item.currentStock || 0}{' '}
+                            {item.unit || 'PCS'}
+                          </p>
+                        </div>
+                        <ChevronDown className="w-4 h-4 text-slate-400 shrink-0" />
+                      </button>
+                    </div>
+
+                    {/* Qty Input */}
+                    <div className="sm:col-span-2">
+                      <label className="block text-[10px] text-slate-500 font-semibold mb-0.5">
+                        Jumlah ({item.unit || 'Unit'})
+                      </label>
+                      <input
+                        type="number"
+                        min="1"
+                        value={item.quantity}
+                        onChange={(e) => handleItemChange(idx, 'quantity', Number(e.target.value))}
+                        className="w-full px-2.5 py-1.5 bg-white rounded-xl text-xs font-bold text-slate-900 border border-slate-200 focus:outline-none focus:ring-1 focus:ring-sky-500 text-center"
+                      />
+                    </div>
+
+                    {/* Unit Cost Price Input */}
+                    <div className="sm:col-span-2">
+                      <label className="block text-[10px] text-slate-500 font-semibold mb-0.5">
+                        Harga Modal / Unit
+                      </label>
+                      <input
+                        type="number"
+                        min="0"
+                        value={item.unitCost}
+                        onChange={(e) => handleItemChange(idx, 'unitCost', Number(e.target.value))}
+                        className="w-full px-2.5 py-1.5 bg-white rounded-xl text-xs font-medium text-slate-900 border border-slate-200 focus:outline-none focus:ring-1 focus:ring-sky-500 text-right"
+                      />
+                    </div>
+
+                    {/* Subtotal Display */}
+                    <div className="sm:col-span-2 text-right">
+                      <label className="block text-[10px] text-slate-500 font-semibold mb-0.5">
+                        Subtotal
+                      </label>
+                      <span className="font-extrabold text-xs text-sky-700 block py-1.5">
+                        {formatRupiah(subtotal)}
+                      </span>
+                    </div>
+
+                    {/* Delete button */}
+                    <div className="sm:col-span-1 flex justify-end">
+                      <button
+                        type="button"
+                        onClick={() => handleRemoveItem(idx)}
+                        className="p-1.5 text-slate-400 hover:text-rose-600 rounded-lg transition"
+                        title="Hapus baris"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </div>
                   </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           </div>
 
-          {/* Total display */}
-          <div className="p-4 bg-sky-50 rounded-2xl border border-sky-100 flex items-center justify-between">
-            <span className="text-xs font-semibold text-sky-900">Total Nilai Pembelian:</span>
-            <span className="text-lg font-extrabold text-sky-700">
+          {/* Grand Total Summary */}
+          <div className="p-4 bg-sky-50/80 rounded-2xl border border-sky-100 flex items-center justify-between">
+            <div>
+              <span className="text-xs font-semibold text-sky-900 block">
+                Total Nilai Faktur Kulakan:
+              </span>
+              <span className="text-[11px] text-sky-700">
+                {items.length} jenis material akan otomatis bertambah ke stok gudang
+              </span>
+            </div>
+            <span className="text-xl font-black text-sky-700">
               {formatRupiah(calculateTotal())}
             </span>
           </div>
 
-          <div className="flex items-center justify-end gap-3 pt-4 border-t border-slate-100">
+          {/* Modal Footer Actions */}
+          <div className="flex items-center justify-end gap-3 pt-3 border-t border-slate-100">
             <button
               type="button"
               onClick={() => setIsCreateModalOpen(false)}
@@ -487,39 +729,72 @@ export const PembelianPage = () => {
             <button
               type="submit"
               disabled={submitting}
-              className="px-5 py-2.5 bg-sky-600 hover:bg-sky-700 text-white rounded-xl text-sm font-semibold transition disabled:opacity-50"
+              className="px-6 py-2.5 bg-sky-600 hover:bg-sky-700 text-white rounded-xl text-sm font-bold transition shadow-xs disabled:opacity-50 flex items-center gap-2"
             >
-              {submitting ? 'Memproses Kulakan...' : 'Simpan & Tambah Stok'}
+              {submitting ? (
+                <>
+                  <RefreshCw className="w-4 h-4 animate-spin" />
+                  Menyimpan...
+                </>
+              ) : (
+                'Simpan & Tambah Stok Barang'
+              )}
             </button>
           </div>
         </form>
       </Modal>
 
-      {/* Detail Purchase Modal */}
+      {/* PRODUCT PICKER MODAL */}
+      <ProductPickerModal
+        isOpen={isPickerOpen}
+        onClose={() => setIsPickerOpen(false)}
+        products={products}
+        categories={categories}
+        alreadySelectedIds={items.map((i) => i.productId).filter(Boolean)}
+        onSelectProduct={handleProductSelectedFromPicker}
+        onSelectMultipleProducts={handleMultipleProductsSelected}
+        onOpenQuickCreateProduct={() => {
+          setIsPickerOpen(false);
+          setIsQuickCreateOpen(true);
+        }}
+      />
+
+      {/* QUICK CREATE PRODUCT MODAL */}
+      <QuickProductModal
+        isOpen={isQuickCreateOpen}
+        onClose={() => setIsQuickCreateOpen(false)}
+        categories={categories}
+        onProductCreated={handleProductCreatedQuickly}
+      />
+
+      {/* DETAIL PURCHASE MODAL */}
       <Modal
         isOpen={Boolean(detailPurchase)}
         onClose={() => setDetailPurchase(null)}
-        title={`Detail Faktur: ${detailPurchase?.purchase_number}`}
+        title={`Faktur Pembelian: ${detailPurchase?.purchase_number}`}
+        size="lg"
       >
         {detailPurchase && (
           <div className="space-y-4">
-            <div className="p-4 bg-slate-50 rounded-2xl border border-slate-200 grid grid-cols-2 gap-3 text-xs">
+            <div className="p-4 bg-slate-50 rounded-2xl border border-slate-200 grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
               <div>
-                <span className="text-slate-500 font-medium">Supplier:</span>
+                <span className="text-slate-500 font-medium">Distributor / Supplier:</span>
                 <p className="font-bold text-slate-900 mt-0.5">{detailPurchase.supplier_name}</p>
               </div>
               <div>
                 <span className="text-slate-500 font-medium">Tanggal Masuk:</span>
                 <p className="font-bold text-slate-900 mt-0.5">
-                  {new Date(detailPurchase.created_at).toLocaleString('id-ID')}
+                  {formatDate(detailPurchase.created_at)}
                 </p>
               </div>
               <div>
                 <span className="text-slate-500 font-medium">Status Pembayaran:</span>
-                <p className="font-bold text-slate-900 mt-0.5">{detailPurchase.payment_status}</p>
+                <p className="font-bold text-slate-900 mt-0.5">
+                  {detailPurchase.payment_status === 'PAID' ? 'LUNAS' : 'TEMPO (HUTANG)'}
+                </p>
               </div>
               <div>
-                <span className="text-slate-500 font-medium">Total Faktur:</span>
+                <span className="text-slate-500 font-medium">Total Pembelian:</span>
                 <p className="font-bold text-sky-600 text-sm mt-0.5">
                   {formatRupiah(detailPurchase.total_amount)}
                 </p>
@@ -527,16 +802,16 @@ export const PembelianPage = () => {
             </div>
 
             <h4 className="text-xs font-bold uppercase text-slate-700 tracking-wider">
-              Item Material Yang Dibeli
+              Rincian Material Barang Masuk
             </h4>
 
             <div className="border border-slate-200 rounded-2xl overflow-hidden text-xs">
               <table className="w-full text-left">
                 <thead className="bg-slate-100 font-semibold text-slate-600 border-b border-slate-200">
                   <tr>
-                    <th className="p-3">Material</th>
-                    <th className="p-3 text-center">Jumlah</th>
-                    <th className="p-3 text-right">Harga Modal</th>
+                    <th className="p-3">Nama Material</th>
+                    <th className="p-3 text-center">Jumlah Masuk</th>
+                    <th className="p-3 text-right">Harga Modal / Unit</th>
                     <th className="p-3 text-right">Subtotal</th>
                   </tr>
                 </thead>
@@ -545,8 +820,15 @@ export const PembelianPage = () => {
                     <tr key={idx}>
                       <td className="p-3 font-medium text-slate-900">
                         {item.product?.name || item.product_name || 'Material'}
+                        {item.product?.sku && (
+                          <span className="ml-2 text-[10px] text-slate-400 font-mono">
+                            ({item.product.sku})
+                          </span>
+                        )}
                       </td>
-                      <td className="p-3 text-center font-bold">{item.quantity}</td>
+                      <td className="p-3 text-center font-bold">
+                        {item.quantity} {item.product?.unit || 'PCS'}
+                      </td>
                       <td className="p-3 text-right">{formatRupiah(item.unit_cost)}</td>
                       <td className="p-3 text-right font-bold text-slate-900">
                         {formatRupiah(item.subtotal)}
@@ -557,7 +839,16 @@ export const PembelianPage = () => {
               </table>
             </div>
 
-            <div className="flex justify-end pt-3 border-t border-slate-100">
+            <div className="flex items-center justify-between pt-3 border-t border-slate-100">
+              <button
+                type="button"
+                onClick={() => window.print()}
+                className="inline-flex items-center gap-1.5 px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-semibold transition"
+              >
+                <Printer className="w-4 h-4" />
+                Cetak Bukti Faktur
+              </button>
+
               <button
                 onClick={() => setDetailPurchase(null)}
                 className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold rounded-xl text-xs"
