@@ -8,6 +8,7 @@ import {
   CheckCircle2,
 } from 'lucide-react';
 import { settingsService } from '../services/settingsService';
+import { Logo } from '../components/common/Logo';
 
 export const PengaturanPage = () => {
   const [settings, setSettings] = useState(() => {
@@ -224,6 +225,9 @@ export const PengaturanPage = () => {
             {/* Thermal Struk Card Simulation */}
             <div className="p-4 bg-slate-50 rounded-2xl border border-slate-200 font-mono text-[11px] leading-tight text-slate-800 space-y-3 shadow-inner max-w-xs mx-auto">
               <div className="text-center space-y-1">
+                <div className="flex justify-center mb-1">
+                  <Logo size="xs" />
+                </div>
                 <p className="font-bold text-xs uppercase tracking-wide">{settings.store_name}</p>
                 <p className="text-[10px] text-slate-600">{settings.address}</p>
                 <p className="text-[10px] text-slate-600">Telp/WA: {settings.phone}</p>

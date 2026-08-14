@@ -3,6 +3,7 @@ import { useCart } from '../../hooks/useCart';
 import { useAuth } from '../../hooks/useAuth';
 import { transactionService } from '../../services/transactionService';
 import { formatCurrency } from '../../utils/formatCurrency';
+import { Logo } from '../common/Logo';
 import {
   X,
   CreditCard,
@@ -105,12 +106,10 @@ export const PaymentModal = ({ isOpen, onClose, onSuccess }) => {
       <div className="bg-white rounded-3xl max-w-lg w-full p-6 shadow-2xl border border-slate-100 space-y-5">
         {/* Modal Header */}
         <div className="flex items-center justify-between pb-3 border-b border-slate-100">
-          <div className="flex items-center space-x-2">
-            <div className="w-9 h-9 rounded-xl bg-emerald-100 text-emerald-700 flex items-center justify-center font-bold">
-              <CreditCard className="w-5 h-5" />
-            </div>
+          <div className="flex items-center space-x-3">
+            <Logo size="sm" />
             <div>
-              <h3 className="font-extrabold text-slate-800 text-base">Pembayaran</h3>
+              <h3 className="font-extrabold text-slate-800 text-base leading-tight">Pembayaran Kasir</h3>
               <p className="text-xs text-slate-500 font-medium">
                 TB. Sumber Agung POS Terminal
               </p>

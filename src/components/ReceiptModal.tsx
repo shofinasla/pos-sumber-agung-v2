@@ -1,8 +1,9 @@
 import React from 'react';
-import { Printer, Download, CheckCircle, X, Store } from 'lucide-react';
+import { Printer, Download, CheckCircle, X } from 'lucide-react';
 import { Transaction } from '../types/pos';
 import { STORE_INFO } from '../data/initialData';
 import { formatRupiah, formatDate } from '../utils/formatters';
+import { Logo } from './common/Logo';
 
 interface ReceiptModalProps {
   transaction: Transaction | null;
@@ -84,7 +85,7 @@ export const ReceiptModal: React.FC<ReceiptModalProps> = ({
             {/* Header */}
             <div className="text-center mb-4 pb-3 border-b border-dashed border-slate-300">
               <div className="flex justify-center mb-1">
-                <Store className="w-6 h-6 text-emerald-600" />
+                <Logo size="sm" />
               </div>
               <h4 className="font-bold text-sm text-slate-900 tracking-wide uppercase">
                 {STORE_INFO.name}

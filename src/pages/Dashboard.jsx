@@ -9,7 +9,6 @@ import {
   ArrowDownRight,
   Package,
   Receipt,
-  HardHat,
   RefreshCw,
   Clock,
   FileSpreadsheet,
@@ -23,6 +22,7 @@ import { useAuth } from '../hooks/useAuth';
 import { formatRupiah } from '../utils/formatters';
 import { dashboardService } from '../services/dashboardService';
 import { supabase, isSupabaseConfigured } from '../lib/supabase';
+import { Logo } from '../components/common/Logo';
 
 export const Dashboard = () => {
   const { user, profile } = useAuth();
@@ -231,19 +231,21 @@ export const Dashboard = () => {
 
       {/* Welcome Banner */}
       <div className="bg-gradient-to-r from-slate-900 via-slate-800 to-slate-900 text-white p-6 rounded-3xl shadow-lg border border-slate-800 flex flex-col md:flex-row justify-between items-start md:items-center gap-4 relative overflow-hidden">
-        <div className="absolute right-0 top-0 w-80 h-80 bg-emerald-500/10 rounded-full blur-3xl pointer-events-none" />
+        <div className="absolute right-0 top-0 w-80 h-80 bg-rose-500/10 rounded-full blur-3xl pointer-events-none" />
         
-        <div className="space-y-1 relative z-10">
-          <div className="flex items-center space-x-2 text-emerald-400 text-xs font-bold uppercase tracking-wider">
-            <HardHat className="w-4 h-4" />
-            <span>POS TB. SUMBER AGUNG</span>
+        <div className="flex items-center gap-4 relative z-10">
+          <Logo size="lg" className="shrink-0 shadow-md shadow-rose-950/50" />
+          <div className="space-y-1">
+            <div className="flex items-center space-x-2 text-rose-400 text-xs font-bold uppercase tracking-wider">
+              <span>TB. SUMBER AGUNG POS SYSTEM</span>
+            </div>
+            <h2 className="text-xl md:text-2xl font-black">
+              Selamat Datang, {profile?.full_name || user?.email || 'Kasir'}!
+            </h2>
+            <p className="text-slate-400 text-xs">
+              Data transaksi omset kasir, nilai persediaan stok, dan performa keuangan diperbarui secara langsung.
+            </p>
           </div>
-          <h2 className="text-xl md:text-2xl font-black">
-            Selamat Datang, {profile?.full_name || user?.email || 'Kasir'}!
-          </h2>
-          <p className="text-slate-400 text-xs">
-            Data transaksi omset kasir, nilai persediaan stok, dan performa keuangan diperbarui secara langsung.
-          </p>
         </div>
 
         <div className="flex flex-wrap gap-2 relative z-10">

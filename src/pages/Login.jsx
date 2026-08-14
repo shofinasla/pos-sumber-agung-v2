@@ -1,7 +1,6 @@
 import { useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import {
-  HardHat,
   Lock,
   Mail,
   ArrowRight,
@@ -17,6 +16,7 @@ import {
   LogIn
 } from 'lucide-react';
 import { useAuth } from '../hooks/useAuth';
+import { Logo } from '../components/common/Logo';
 
 export const Login = () => {
   const [activeTab, setActiveTab] = useState('login'); // 'login' | 'register'
@@ -121,8 +121,8 @@ export const Login = () => {
         
         {/* Brand Header */}
         <div className="text-center space-y-2">
-          <div className="inline-flex w-14 h-14 rounded-2xl bg-gradient-to-br from-emerald-500 to-teal-600 items-center justify-center text-slate-950 shadow-lg shadow-emerald-500/20 mb-2">
-            <HardHat className="w-8 h-8 font-black" />
+          <div className="inline-flex items-center justify-center mb-1">
+            <Logo size="xl" className="shadow-lg shadow-rose-900/30" />
           </div>
           <h1 className="text-2xl font-black text-white tracking-tight">TB. SUMBER AGUNG</h1>
           <p className="text-xs text-slate-400 font-medium">

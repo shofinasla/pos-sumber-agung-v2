@@ -1,5 +1,6 @@
 import { Printer, PlusCircle, CheckCircle2 } from 'lucide-react';
 import { formatCurrency } from '../../utils/formatCurrency';
+import { Logo } from '../common/Logo';
 
 export const Receipt = ({ isOpen, saleResult, onNewTransaction }) => {
   if (!isOpen || !saleResult) return null;
@@ -38,7 +39,10 @@ export const Receipt = ({ isOpen, saleResult, onNewTransaction }) => {
         <div className="bg-slate-50 border border-slate-200 rounded-2xl p-4 font-mono text-xs text-slate-800 space-y-3">
           <div id="printable-receipt" className="space-y-3">
             {/* Store Header */}
-            <div className="text-center space-y-0.5">
+            <div className="text-center space-y-1">
+              <div className="flex justify-center mb-1">
+                <Logo size="sm" />
+              </div>
               <h2 className="font-bold text-sm tracking-wide">TB. SUMBER AGUNG</h2>
               <p className="text-[10px] text-slate-500">
                 Jl. Raya Bahan Bangunan No. 88
