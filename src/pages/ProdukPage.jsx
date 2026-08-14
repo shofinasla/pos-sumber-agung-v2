@@ -43,7 +43,7 @@ export function ProdukPage() {
     refreshProducts,
   } = useProducts();
 
-  const { categories } = useCategories();
+  const { categories, refreshCategories } = useCategories();
 
   // Modals state
   const [isFormOpen, setIsFormOpen] = useState(false);
@@ -91,6 +91,7 @@ export function ProdukPage() {
         : 'Produk material baru berhasil ditambahkan.'
     );
     refreshProducts();
+    refreshCategories();
     return { error: null };
   };
 
@@ -124,7 +125,14 @@ export function ProdukPage() {
 
   const handleCSVImportExecute = async (parsedRows, categoryMap) => {
     const summary = await productService.importProductsCSV(parsedRows, categoryMap);
-    refreshProducts();
+    await refreshProducts();
+    await refreshCategories();
+    if (summary.createdCategoriesCount > 0) {
+      showToast(
+        `Import sukses: ${summary.successCount} produk & ${summary.createdCategoriesCount} kategori baru otomatis dibuat.`,
+        'success'
+      );
+    }
     return summary;
   };
 

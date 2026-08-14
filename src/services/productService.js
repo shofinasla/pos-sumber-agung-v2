@@ -1,5 +1,6 @@
 import { supabase, isSupabaseConfigured } from '../lib/supabase';
 import { toSearchString } from '../utils/searchUtils';
+import { categoryService } from './categoryService';
 
 // Local storage key for demo fallback mode
 const DEMO_PRODUCTS_KEY = 'tb_sa_demo_products';
@@ -499,26 +500,102 @@ export const productService = {
     }
   },
 
-  // Bulk CSV Import Processor
+  // Bulk CSV Import Processor with Auto-Creation of Missing Categories
   // Format required: Produk;Harga Pokok;Harga Jual;Stok;Grup Produk;Satuan;Barcode;Kode Produk;Non Stok
   async importProductsCSV(rows, categoryMap = {}) {
     let successCount = 0;
     let failCount = 0;
     let duplicateCount = 0;
     const errors = [];
+    const newlyCreatedCategories = [];
 
+    // Local copy of category map (lowercase category name -> id)
+    const localCatMap = { ...categoryMap };
+
+    // Fetch existing categories to ensure localCatMap is as up to date as possible
+    try {
+      const { data: existingCats } = await categoryService.getCategories();
+      if (existingCats && Array.isArray(existingCats)) {
+        existingCats.forEach((c) => {
+          if (c.name && c.id) {
+            localCatMap[c.name.trim().toLowerCase()] = c.id;
+          }
+        });
+      }
+    } catch {
+      // Fallback
+    }
+
+    // Step 1: Pre-scan and automatically create any missing categories from CSV
+    for (const row of rows) {
+      const rawCategory =
+        row['Grup Produk'] ||
+        row['Kategori'] ||
+        row['Kategori Produk'] ||
+        row['category'] ||
+        row['Category'] ||
+        row['Grup'] ||
+        row['Group'] ||
+        row['Kelompok'] ||
+        row['Golongan'] ||
+        row['category_name'] ||
+        '';
+
+      const catName = typeof rawCategory === 'string' ? rawCategory.trim() : '';
+      if (catName && !localCatMap[catName.toLowerCase()]) {
+        try {
+          const res = await categoryService.findOrCreateCategory(
+            catName,
+            `Kategori otomatis dibuat dari import CSV produk`
+          );
+          if (res.data && res.data.id) {
+            localCatMap[catName.toLowerCase()] = res.data.id;
+            if (res.created) {
+              // Avoid duplicate tracking in newlyCreatedCategories list
+              if (!newlyCreatedCategories.some((c) => c.id === res.data.id)) {
+                newlyCreatedCategories.push({
+                  id: res.data.id,
+                  name: res.data.name,
+                });
+              }
+            }
+          }
+        } catch (err) {
+          console.error(`Gagal membuat kategori otomatis "${catName}":`, err);
+        }
+      }
+    }
+
+    // Step 2: Process each product row with validated / auto-created category IDs
     for (let i = 0; i < rows.length; i++) {
       const row = rows[i];
       const rowNum = i + 2; // CSV 1-indexed row header offset
 
-      const name = row['Produk'] || row['Nama Produk'] || row['name'];
-      const costPrice = parseFloat(row['Harga Pokok'] || row['cost_price'] || 0);
-      const sellingPrice = parseFloat(row['Harga Jual'] || row['selling_price'] || 0);
-      const stock = parseFloat(row['Stok'] || row['stock'] || 0);
-      const categoryName = row['Grup Produk'] || row['Kategori'] || row['category'];
-      const unit = row['Satuan'] || row['unit'] || 'PCS';
-      const barcode = row['Barcode'] || row['barcode'] || null;
-      const sku = row['Kode Produk'] || row['SKU'] || row['sku'] || `SKU-${Date.now()}-${i}`;
+      const name = row['Produk'] || row['Nama Produk'] || row['name'] || row['Nama'];
+      const costPrice = parseFloat(
+        row['Harga Pokok'] || row['Harga Modal'] || row['cost_price'] || row['modal'] || 0
+      );
+      const sellingPrice = parseFloat(
+        row['Harga Jual'] || row['selling_price'] || row['harga'] || 0
+      );
+      const stock = parseFloat(row['Stok'] || row['stock'] || row['stok'] || row['Qty'] || 0);
+      const rawCategory =
+        row['Grup Produk'] ||
+        row['Kategori'] ||
+        row['Kategori Produk'] ||
+        row['category'] ||
+        row['Category'] ||
+        row['Grup'] ||
+        row['Group'] ||
+        row['Kelompok'] ||
+        row['Golongan'] ||
+        '';
+      const unit = row['Satuan'] || row['unit'] || row['satuan'] || 'PCS';
+      const barcode = row['Barcode'] || row['barcode'] || row['kode_barcode'] || null;
+      const sku = row['Kode Produk'] || row['SKU'] || row['sku'] || row['kode'] || `SKU-${Date.now()}-${i}`;
+      const minStock = parseFloat(
+        row['Min Stok'] || row['Minimum Stok'] || row['min_stock'] || 5
+      );
 
       if (!name || !name.trim()) {
         failCount++;
@@ -526,8 +603,9 @@ export const productService = {
         continue;
       }
 
-      const categoryId = categoryName && categoryMap[categoryName.trim().toLowerCase()]
-        ? categoryMap[categoryName.trim().toLowerCase()]
+      const catName = typeof rawCategory === 'string' ? rawCategory.trim() : '';
+      const categoryId = catName && localCatMap[catName.toLowerCase()]
+        ? localCatMap[catName.toLowerCase()]
         : null;
 
       const productPayload = {
@@ -539,7 +617,7 @@ export const productService = {
         cost_price: isNaN(costPrice) ? 0 : Math.max(0, costPrice),
         selling_price: isNaN(sellingPrice) ? 0 : Math.max(0, sellingPrice),
         stock: isNaN(stock) ? 0 : Math.max(0, stock),
-        minimum_stock: 5,
+        minimum_stock: isNaN(minStock) ? 5 : Math.max(0, minStock),
         is_active: true,
       };
 
@@ -562,6 +640,8 @@ export const productService = {
       successCount,
       failCount,
       duplicateCount,
+      createdCategories: newlyCreatedCategories,
+      createdCategoriesCount: newlyCreatedCategories.length,
       errors,
     };
   },

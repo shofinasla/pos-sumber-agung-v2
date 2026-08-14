@@ -191,4 +191,85 @@ export const categoryService = {
       return { error };
     }
   },
+
+  // Find or automatically create category by name (Used in CSV import and product quick add)
+  async findOrCreateCategory(name, description = '') {
+    if (!name || !name.trim()) {
+      return { data: null, created: false, error: new Error('Nama kategori kosong') };
+    }
+    const cleanName = name.trim();
+    const q = cleanName.toLowerCase();
+
+    if (!isSupabaseConfigured) {
+      const categories = getLocalCategories();
+      const existing = categories.find((c) => (c.name || '').trim().toLowerCase() === q);
+      if (existing) {
+        return { data: existing, created: false, error: null };
+      }
+
+      const newCategory = {
+        id: `cat-${Date.now()}-${Math.floor(Math.random() * 10000)}`,
+        name: cleanName,
+        description: description || 'Kategori dibuat otomatis dari import CSV produk',
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      };
+
+      const updated = [newCategory, ...categories];
+      saveLocalCategories(updated);
+      return { data: newCategory, created: true, error: null };
+    }
+
+    try {
+      // 1. Query for existing category (exact case-insensitive match)
+      const { data: existingRows, error: searchError } = await supabase
+        .from('categories')
+        .select('*')
+        .ilike('name', cleanName);
+
+      if (searchError) throw searchError;
+
+      const exactMatch = (existingRows || []).find(
+        (c) => (c.name || '').trim().toLowerCase() === q
+      );
+
+      if (exactMatch) {
+        return { data: exactMatch, created: false, error: null };
+      }
+
+      // 2. Insert new category
+      const { data: newCat, error: insertError } = await supabase
+        .from('categories')
+        .insert([
+          {
+            name: cleanName,
+            description: description || 'Kategori dibuat otomatis dari import CSV produk',
+          },
+        ])
+        .select()
+        .single();
+
+      if (insertError) {
+        // Handle possible duplicate / race condition
+        if (insertError.code === '23505') {
+          const { data: retryRows } = await supabase
+            .from('categories')
+            .select('*')
+            .ilike('name', cleanName);
+          const found = (retryRows || []).find(
+            (c) => (c.name || '').trim().toLowerCase() === q
+          );
+          if (found) {
+            return { data: found, created: false, error: null };
+          }
+        }
+        throw insertError;
+      }
+
+      return { data: newCat, created: true, error: null };
+    } catch (error) {
+      console.error(`Error in findOrCreateCategory for "${cleanName}":`, error);
+      return { data: null, created: false, error };
+    }
+  },
 };

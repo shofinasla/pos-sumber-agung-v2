@@ -1,8 +1,9 @@
 import { useState } from 'react';
-import { Loader2, AlertCircle, Barcode, Package, Camera } from 'lucide-react';
+import { Loader2, AlertCircle, Barcode, Package, Camera, Plus, FolderPlus, X } from 'lucide-react';
 import { Modal } from '../common/Modal';
 import { UNITS } from '../../utils/formatters';
 import { CameraScannerModal } from '../common/CameraScannerModal';
+import { categoryService } from '../../services/categoryService';
 
 const ProductFormInner = ({
   onClose,
@@ -39,6 +40,8 @@ const ProductFormInner = ({
     };
   });
 
+  const [isNewCategoryMode, setIsNewCategoryMode] = useState(false);
+  const [newCategoryName, setNewCategoryName] = useState('');
   const [isCameraOpen, setIsCameraOpen] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
   const [loading, setLoading] = useState(false);
@@ -87,7 +90,35 @@ const ProductFormInner = ({
 
     setLoading(true);
 
-    const { error } = await onSubmit(formData);
+    let finalCategoryId = formData.category_id;
+
+    // Handle new category creation on the fly
+    if (isNewCategoryMode && newCategoryName.trim()) {
+      try {
+        const catRes = await categoryService.findOrCreateCategory(
+          newCategoryName.trim(),
+          'Kategori dibuat saat penambahan produk baru'
+        );
+        if (catRes.data && catRes.data.id) {
+          finalCategoryId = catRes.data.id;
+        } else if (catRes.error) {
+          setErrorMsg(catRes.error.message || 'Gagal membuat kategori baru');
+          setLoading(false);
+          return;
+        }
+      } catch (err) {
+        setErrorMsg(err.message || 'Gagal memproses kategori baru');
+        setLoading(false);
+        return;
+      }
+    }
+
+    const payload = {
+      ...formData,
+      category_id: finalCategoryId || null,
+    };
+
+    const { error } = await onSubmit(payload);
 
     if (error) {
       setErrorMsg(error.message || 'Gagal menyimpan produk.');
@@ -182,19 +213,55 @@ const ProductFormInner = ({
           </div>
 
           <div>
-            <label className="block text-xs font-bold text-slate-700 mb-1">Kategori Material</label>
-            <select
-              value={formData.category_id}
-              onChange={(e) => setFormData({ ...formData, category_id: e.target.value })}
-              className="w-full px-3.5 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium text-slate-900 focus:outline-none focus:ring-2 focus:ring-emerald-500"
-            >
-              <option value="">-- Tanpa Kategori --</option>
-              {categories.map((cat) => (
-                <option key={cat.id} value={cat.id}>
-                  {cat.name}
-                </option>
-              ))}
-            </select>
+            <div className="flex justify-between items-center mb-1">
+              <label className="block text-xs font-bold text-slate-700">Kategori Material</label>
+              <button
+                type="button"
+                onClick={() => {
+                  setIsNewCategoryMode(!isNewCategoryMode);
+                  if (!isNewCategoryMode) setNewCategoryName('');
+                }}
+                className="inline-flex items-center gap-1 text-[11px] text-emerald-600 hover:text-emerald-700 font-bold bg-emerald-50 hover:bg-emerald-100 px-2 py-0.5 rounded-md transition"
+              >
+                {isNewCategoryMode ? (
+                  <>
+                    <X className="w-3 h-3" />
+                    <span>Pilih yang Ada</span>
+                  </>
+                ) : (
+                  <>
+                    <Plus className="w-3 h-3" />
+                    <span>+ Kategori Baru</span>
+                  </>
+                )}
+              </button>
+            </div>
+
+            {isNewCategoryMode ? (
+              <div className="relative">
+                <FolderPlus className="w-4 h-4 text-emerald-600 absolute left-3 top-2.5" />
+                <input
+                  type="text"
+                  placeholder="Ketik nama kategori baru..."
+                  value={newCategoryName}
+                  onChange={(e) => setNewCategoryName(e.target.value)}
+                  className="w-full pl-9 pr-3.5 py-2 bg-emerald-50/50 border border-emerald-300 rounded-xl text-xs font-semibold text-slate-900 focus:outline-none focus:ring-2 focus:ring-emerald-500 placeholder:text-slate-400"
+                />
+              </div>
+            ) : (
+              <select
+                value={formData.category_id}
+                onChange={(e) => setFormData({ ...formData, category_id: e.target.value })}
+                className="w-full px-3.5 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium text-slate-900 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+              >
+                <option value="">-- Tanpa Kategori --</option>
+                {categories.map((cat) => (
+                  <option key={cat.id} value={cat.id}>
+                    {cat.name}
+                  </option>
+                ))}
+              </select>
+            )}
           </div>
 
           <div>

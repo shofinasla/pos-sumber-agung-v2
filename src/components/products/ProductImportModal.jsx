@@ -1,5 +1,16 @@
-import { useState } from 'react';
-import { FileText, Upload, AlertCircle, CheckCircle2, Loader2, Download, Table } from 'lucide-react';
+import { useState, useMemo } from 'react';
+import {
+  FileText,
+  Upload,
+  AlertCircle,
+  CheckCircle2,
+  Loader2,
+  Download,
+  Table,
+  Sparkles,
+  Layers,
+  FolderPlus,
+} from 'lucide-react';
 import { Modal } from '../common/Modal';
 import { formatCurrency } from '../../utils/formatCurrency';
 
@@ -25,7 +36,42 @@ export const ProductImportModal = ({ isOpen, onClose, onImport, categories = [] 
     onClose();
   };
 
-  // Helper to parse CSV line with ';' delimiter
+  // Compute category detection stats for preview
+  const categoryAnalysis = useMemo(() => {
+    const existingSet = new Set((categories || []).map((c) => (c.name || '').trim().toLowerCase()));
+    const allFound = new Set();
+    const newFound = new Set();
+
+    parsedRows.forEach((r) => {
+      const rawCategory =
+        r['Grup Produk'] ||
+        r['Kategori'] ||
+        r['Kategori Produk'] ||
+        r['category'] ||
+        r['Category'] ||
+        r['Grup'] ||
+        r['Group'] ||
+        r['Kelompok'] ||
+        r['Golongan'] ||
+        r['category_name'] ||
+        '';
+      const clean = typeof rawCategory === 'string' ? rawCategory.trim() : '';
+      if (clean) {
+        allFound.add(clean);
+        if (!existingSet.has(clean.toLowerCase())) {
+          newFound.add(clean);
+        }
+      }
+    });
+
+    return {
+      allCategories: Array.from(allFound),
+      newCategories: Array.from(newFound),
+      existingSet,
+    };
+  }, [parsedRows, categories]);
+
+  // Helper to parse CSV line with ';' or ',' delimiter
   const parseCSVContent = (text) => {
     const lines = text.split(/\r\n|\n/).filter((l) => l.trim() !== '');
     if (lines.length < 2) {
@@ -52,7 +98,8 @@ export const ProductImportModal = ({ isOpen, onClose, onImport, categories = [] 
         rowObj[h] = values[idx] !== undefined ? values[idx] : '';
       });
 
-      const productName = rowObj['Produk'] || rowObj['Nama Produk'] || rowObj['name'];
+      const productName =
+        rowObj['Produk'] || rowObj['Nama Produk'] || rowObj['name'] || rowObj['Nama'];
       if (!productName) {
         errors.push(`Baris ${i + 1}: Nama Produk kosong`);
       }
@@ -90,8 +137,10 @@ export const ProductImportModal = ({ isOpen, onClose, onImport, categories = [] 
 
     // Build category mapping (lowercase category name -> id)
     const categoryMap = {};
-    categories.forEach((c) => {
-      categoryMap[c.name.trim().toLowerCase()] = c.id;
+    (categories || []).forEach((c) => {
+      if (c.name && c.id) {
+        categoryMap[c.name.trim().toLowerCase()] = c.id;
+      }
     });
 
     const summary = await onImport(parsedRows, categoryMap);
@@ -102,11 +151,13 @@ export const ProductImportModal = ({ isOpen, onClose, onImport, categories = [] 
   };
 
   const downloadSampleTemplate = () => {
-    const header = 'Produk;Harga Pokok;Harga Jual;Stok;Grup Produk;Satuan;Barcode;Kode Produk;Non Stok\n';
+    const header = 'Produk;Harga Pokok;Harga Jual;Stok;Grup Produk;Satuan;Barcode;Kode Produk;Min Stok\n';
     const sampleRows = [
-      'Semen Gresik 40kg;58000;65000;100;Semen & Pasir;SAK;899123456101;SMN-GRS-40;Tidak',
-      'Besi Beton 10mm SNI;65000;75000;50;Besi & Logam;BATANG;899123456102;BSI-BTN-10;Tidak',
-      'Cat Nippon Paint 5kg;115000;135000;20;Cat & Coating;DOS;899123456103;CAT-NPP-05;Tidak',
+      'Semen Gresik 40kg;58000;65000;100;Semen & Pasir;SAK;899123456101;SMN-GRS-40;20',
+      'Besi Beton 10mm SNI;65000;75000;50;Besi & Logam;BATANG;899123456102;BSI-BTN-10;10',
+      'Cat Nippon Paint 5kg;115000;135000;20;Cat & Coating;DOS;899123456103;CAT-NPP-05;5',
+      'Kran Cuci Piring Fleksibel;45000;60000;15;Pipa & Sanitari;PCS;899123456104;KRN-FLX-01;3',
+      'Palu Martil Gagang Karet 500g;28000;40000;25;Peralatan Tukang;PCS;899123456105;PLU-MRT-50;5',
     ].join('\n');
 
     const blob = new Blob([header + sampleRows], { type: 'text/csv;charset=utf-8;' });
@@ -149,7 +200,7 @@ export const ProductImportModal = ({ isOpen, onClose, onImport, categories = [] 
             >
               2
             </span>
-            <span className="font-semibold text-slate-800">Pratinjau & Validasi</span>
+            <span className="font-semibold text-slate-800">Pratinjau & Validasi Kategori</span>
           </div>
 
           <div className="w-8 h-px bg-slate-300" />
@@ -173,14 +224,18 @@ export const ProductImportModal = ({ isOpen, onClose, onImport, categories = [] 
               <div className="space-y-1">
                 <h4 className="font-bold text-xs text-slate-900 flex items-center gap-1.5">
                   <FileText className="w-4 h-4 text-emerald-600" />
-                  Format Berkas CSV
+                  Format Berkas CSV & Otomatisasi Kategori
                 </h4>
                 <p className="text-[11px] text-slate-500">
-                  Gunakan pemisah titik koma (<code className="font-bold text-slate-800">;</code>) dengan kolom:
+                  Gunakan pemisah titik koma (<code className="font-bold text-slate-800">;</code>) atau koma (<code className="font-bold text-slate-800">,</code>) dengan kolom:
                   <br />
-                  <code className="text-[10px] text-emerald-800 bg-emerald-50 px-1 py-0.5 rounded">
-                    Produk;Harga Pokok;Harga Jual;Stok;Grup Produk;Satuan;Barcode;Kode Produk
+                  <code className="text-[10px] text-emerald-800 bg-emerald-50 px-1 py-0.5 rounded font-mono font-bold">
+                    Produk;Harga Pokok;Harga Jual;Stok;Grup Produk;Satuan;Barcode;Kode Produk;Min Stok
                   </code>
+                </p>
+                <p className="text-[11px] text-emerald-700 font-semibold flex items-center gap-1 mt-1">
+                  <Sparkles className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                  <span>Kategori pada kolom <strong>Grup Produk / Kategori</strong> yang belum ada akan <strong>otomatis dibuat</strong> ke database!</span>
                 </p>
               </div>
 
@@ -221,10 +276,50 @@ export const ProductImportModal = ({ isOpen, onClose, onImport, categories = [] 
               <button
                 type="button"
                 onClick={() => setStep('upload')}
-                className="text-xs text-slate-500 hover:text-slate-800 underline"
+                className="text-xs text-slate-500 hover:text-slate-800 underline font-medium"
               >
                 Ganti Berkas
               </button>
+            </div>
+
+            {/* Category Auto-Detection Banner */}
+            <div className="p-3.5 bg-emerald-50/80 border border-emerald-200 rounded-2xl space-y-2">
+              <div className="flex items-center justify-between text-xs">
+                <div className="flex items-center gap-1.5 font-bold text-emerald-900">
+                  <Layers className="w-4 h-4 text-emerald-600 shrink-0" />
+                  <span>Deteksi Kategori Material ({categoryAnalysis.allCategories.length} Kategori Ditemukan)</span>
+                </div>
+                {categoryAnalysis.newCategories.length > 0 ? (
+                  <span className="px-2.5 py-0.5 bg-emerald-600 text-white font-bold rounded-full text-[10px] flex items-center gap-1">
+                    <Sparkles className="w-3 h-3" />
+                    {categoryAnalysis.newCategories.length} Kategori Baru Akan Dibuat
+                  </span>
+                ) : (
+                  <span className="px-2.5 py-0.5 bg-emerald-100 text-emerald-800 font-bold rounded-full text-[10px]">
+                    Semua kategori sudah terdaftar
+                  </span>
+                )}
+              </div>
+
+              {categoryAnalysis.newCategories.length > 0 && (
+                <div className="space-y-1">
+                  <p className="text-[11px] text-emerald-800">
+                    Sistem akan <strong>otomatis membuat kategori baru</strong> berikut ke database dan menautkannya ke produk terkait:
+                  </p>
+                  <div className="flex flex-wrap gap-1.5 pt-0.5">
+                    {categoryAnalysis.newCategories.map((newCat, idx) => (
+                      <span
+                        key={idx}
+                        className="px-2 py-0.5 bg-white border border-emerald-300 text-emerald-900 font-bold text-[11px] rounded-lg shadow-2xs flex items-center gap-1"
+                      >
+                        <FolderPlus className="w-3 h-3 text-emerald-600" />
+                        {newCat}
+                        <span className="text-[9px] bg-emerald-100 text-emerald-800 px-1 rounded font-normal">Baru</span>
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
 
             {parseErrors.length > 0 && (
@@ -259,25 +354,57 @@ export const ProductImportModal = ({ isOpen, onClose, onImport, categories = [] 
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
-                  {parsedRows.slice(0, 15).map((row, idx) => (
-                    <tr key={idx} className="hover:bg-slate-50">
-                      <td className="p-2.5 text-slate-400 font-mono">{idx + 1}</td>
-                      <td className="p-2.5 font-mono font-bold text-slate-800">
-                        {row['Kode Produk'] || row['SKU'] || '-'}
-                      </td>
-                      <td className="p-2.5 font-semibold text-slate-900">
-                        {row['Produk'] || row['Nama Produk'] || '-'}
-                      </td>
-                      <td className="p-2.5 text-slate-600">{row['Grup Produk'] || row['Kategori'] || '-'}</td>
-                      <td className="p-2.5 font-mono text-slate-900">{row['Stok'] || 0}</td>
-                      <td className="p-2.5 font-mono text-slate-600">
-                        {formatCurrency(row['Harga Pokok'] || 0)}
-                      </td>
-                      <td className="p-2.5 font-mono font-bold text-emerald-700">
-                        {formatCurrency(row['Harga Jual'] || 0)}
-                      </td>
-                    </tr>
-                  ))}
+                  {parsedRows.slice(0, 15).map((row, idx) => {
+                    const rawCat = (
+                      row['Grup Produk'] ||
+                      row['Kategori'] ||
+                      row['Kategori Produk'] ||
+                      row['category'] ||
+                      row['Category'] ||
+                      row['Grup'] ||
+                      row['Group'] ||
+                      row['Kelompok'] ||
+                      row['Golongan'] ||
+                      ''
+                    ).trim();
+                    const isNewCat = rawCat && !categoryAnalysis.existingSet.has(rawCat.toLowerCase());
+
+                    return (
+                      <tr key={idx} className="hover:bg-slate-50">
+                        <td className="p-2.5 text-slate-400 font-mono">{idx + 1}</td>
+                        <td className="p-2.5 font-mono font-bold text-slate-800">
+                          {row['Kode Produk'] || row['SKU'] || '-'}
+                        </td>
+                        <td className="p-2.5 font-semibold text-slate-900">
+                          {row['Produk'] || row['Nama Produk'] || row['name'] || '-'}
+                        </td>
+                        <td className="p-2.5">
+                          {rawCat ? (
+                            isNewCat ? (
+                              <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-emerald-100 text-emerald-800 font-bold rounded-md text-[10px]">
+                                <Sparkles className="w-2.5 h-2.5" />
+                                {rawCat}
+                                <span className="text-[9px] bg-emerald-200/80 text-emerald-900 px-1 rounded font-normal">Otomatis Dibuat</span>
+                              </span>
+                            ) : (
+                              <span className="px-2 py-0.5 bg-slate-100 text-slate-700 font-medium rounded-md text-[10px]">
+                                {rawCat}
+                              </span>
+                            )
+                          ) : (
+                            <span className="text-slate-400 italic text-[11px]">Tanpa Kategori</span>
+                          )}
+                        </td>
+                        <td className="p-2.5 font-mono text-slate-900">{row['Stok'] || 0}</td>
+                        <td className="p-2.5 font-mono text-slate-600">
+                          {formatCurrency(row['Harga Pokok'] || row['cost_price'] || 0)}
+                        </td>
+                        <td className="p-2.5 font-mono font-bold text-emerald-700">
+                          {formatCurrency(row['Harga Jual'] || row['selling_price'] || 0)}
+                        </td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
               {parsedRows.length > 15 && (
@@ -305,7 +432,7 @@ export const ProductImportModal = ({ isOpen, onClose, onImport, categories = [] 
                 {loading ? (
                   <>
                     <Loader2 className="w-4 h-4 animate-spin" />
-                    <span>Memproses Import Data...</span>
+                    <span>Memproses Import & Kategori...</span>
                   </>
                 ) : (
                   <>
@@ -325,18 +452,26 @@ export const ProductImportModal = ({ isOpen, onClose, onImport, categories = [] 
               <div className="w-12 h-12 bg-emerald-100 text-emerald-600 rounded-2xl flex items-center justify-center mx-auto">
                 <CheckCircle2 className="w-6 h-6" />
               </div>
-              <h4 className="text-base font-bold text-slate-900">Proses Import Selesai</h4>
+              <h4 className="text-base font-bold text-slate-900">Proses Import Berhasil Selesai</h4>
               <p className="text-xs text-slate-500">
-                Berikut adalah ringkasan hasil pemprosesan file CSV produk Anda.
+                Data katalog produk dan kategori baru telah diproses dan disimpan ke database.
               </p>
             </div>
 
-            <div className="grid grid-cols-3 gap-3 text-center">
+            {/* Metrics */}
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 text-center">
               <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-2xl">
                 <span className="block text-2xl font-black text-emerald-700 font-mono">
                   {importSummary.successCount}
                 </span>
-                <span className="text-[11px] font-bold text-emerald-800">Berhasil Dibuat</span>
+                <span className="text-[11px] font-bold text-emerald-800">Produk Berhasil</span>
+              </div>
+
+              <div className="p-3 bg-teal-50 border border-teal-200 rounded-2xl">
+                <span className="block text-2xl font-black text-teal-700 font-mono">
+                  {importSummary.createdCategoriesCount || (importSummary.createdCategories ? importSummary.createdCategories.length : 0)}
+                </span>
+                <span className="text-[11px] font-bold text-teal-800">Kategori Baru Dibuat</span>
               </div>
 
               <div className="p-3 bg-amber-50 border border-amber-200 rounded-2xl">
@@ -354,13 +489,34 @@ export const ProductImportModal = ({ isOpen, onClose, onImport, categories = [] 
               </div>
             </div>
 
-            {importSummary.errors.length > 0 && (
+            {/* Newly Created Categories Highlight Card */}
+            {importSummary.createdCategories && importSummary.createdCategories.length > 0 && (
+              <div className="p-3.5 bg-emerald-50 border border-emerald-200 rounded-2xl space-y-2">
+                <h5 className="font-bold text-xs text-emerald-900 flex items-center gap-1.5">
+                  <Sparkles className="w-4 h-4 text-emerald-600" />
+                  {importSummary.createdCategories.length} Kategori Baru Berhasil Dibuat Otomatis:
+                </h5>
+                <div className="flex flex-wrap gap-1.5">
+                  {importSummary.createdCategories.map((cat, idx) => (
+                    <span
+                      key={cat.id || idx}
+                      className="px-2.5 py-1 bg-white border border-emerald-300 text-emerald-800 font-bold text-xs rounded-xl shadow-2xs flex items-center gap-1"
+                    >
+                      <FolderPlus className="w-3.5 h-3.5 text-emerald-600" />
+                      {cat.name}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {importSummary.errors && importSummary.errors.length > 0 && (
               <div className="p-3 bg-slate-50 border border-slate-200 rounded-2xl space-y-2">
                 <h5 className="font-bold text-xs text-slate-800 flex items-center gap-1.5">
                   <Table className="w-4 h-4 text-slate-600" />
-                  Rincian Error / Catatan Baris:
+                  Rincian Catatan Baris:
                 </h5>
-                <div className="max-h-36 overflow-y-auto space-y-1 text-[11px] text-slate-600 pr-2">
+                <div className="max-h-36 overflow-y-auto space-y-1 text-[11px] text-slate-600 pr-2 custom-scrollbar">
                   {importSummary.errors.map((err, i) => (
                     <div key={i} className="flex justify-between border-b border-slate-100 pb-1">
                       <span className="font-semibold text-slate-900">Baris {err.row}</span>
