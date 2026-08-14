@@ -63,15 +63,15 @@ export const Navbar = ({ onToggleSidebar }) => {
       <div className="flex items-center space-x-3 md:space-x-4">
         {/* Supabase status indicator */}
         <div
-          title={isSupabaseConfigured ? 'Terhubung ke Supabase Cloud' : 'Mode Offline / Local Demo (Isi .env untuk Supabase Cloud)'}
+          title={isSupabaseConfigured ? 'Terhubung ke Cloud Database' : 'Database Lokal / Penyimpanan Perangkat'}
           className={`hidden md:flex items-center space-x-1.5 px-2.5 py-1 rounded-full text-xs font-semibold ${
             isSupabaseConfigured
               ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
-              : 'bg-amber-50 text-amber-700 border border-amber-200'
+              : 'bg-slate-100 text-slate-700 border border-slate-200'
           }`}
         >
           <Database className="w-3.5 h-3.5" />
-          <span>{isSupabaseConfigured ? 'Supabase Connected' : 'Local Demo Mode'}</span>
+          <span>{isSupabaseConfigured ? 'Cloud Terhubung' : 'Penyimpanan Lokal'}</span>
         </div>
 
         {/* User Card */}

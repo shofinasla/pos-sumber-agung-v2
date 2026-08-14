@@ -1,4 +1,5 @@
 import { supabase, isSupabaseConfigured } from '../lib/supabase';
+import { toSearchString } from '../utils/searchUtils';
 
 const DEMO_PIUTANG_KEY = 'tb_sa_demo_piutang';
 const DEMO_HUTANG_KEY = 'tb_sa_demo_hutang';
@@ -79,13 +80,14 @@ export const debtService = {
    * Mengambil Piutang Pelanggan (Bon Proyek/Tukang)
    */
   async getPiutangList(search = '') {
+    const searchStr = toSearchString(search);
+    const q = searchStr.toLowerCase();
     if (!isSupabaseConfigured) {
       let list = getLocalPiutang();
-      if (search.trim()) {
-        const q = search.trim().toLowerCase();
+      if (q) {
         list = list.filter(
           (item) =>
-            item.customer_name.toLowerCase().includes(q) ||
+            (item.customer_name || '').toLowerCase().includes(q) ||
             (item.notes || '').toLowerCase().includes(q)
         );
       }
@@ -139,13 +141,14 @@ export const debtService = {
    * Mengambil Hutang Supplier (Tagihan Pembelian Material)
    */
   async getHutangList(search = '') {
+    const searchStr = toSearchString(search);
+    const q = searchStr.toLowerCase();
     if (!isSupabaseConfigured) {
       let list = getLocalHutang();
-      if (search.trim()) {
-        const q = search.trim().toLowerCase();
+      if (q) {
         list = list.filter(
           (item) =>
-            item.supplier_name.toLowerCase().includes(q) ||
+            (item.supplier_name || '').toLowerCase().includes(q) ||
             (item.invoice_number || '').toLowerCase().includes(q)
         );
       }

@@ -87,7 +87,7 @@ export const transactionService = {
       } catch (err) {
         return {
           data: null,
-          error: { message: err.message || 'Gagal menyimpan transaksi demo.' },
+          error: { message: err.message || 'Gagal menyimpan transaksi.' },
         };
       }
     }

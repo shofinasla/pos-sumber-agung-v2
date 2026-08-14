@@ -1,4 +1,5 @@
 import { supabase, isSupabaseConfigured } from '../lib/supabase';
+import { toSearchString } from '../utils/searchUtils';
 
 const DEMO_PURCHASES_KEY = 'tb_sa_demo_purchases';
 const DEMO_PRODUCTS_KEY = 'tb_sa_demo_products';
@@ -17,10 +18,12 @@ function saveLocalPurchases(purchases) {
 
 export const purchaseService = {
   async getPurchases(filters = {}) {
+    const searchStr = typeof filters === 'string' ? toSearchString(filters) : toSearchString(filters?.search);
+    const q = searchStr.toLowerCase();
+
     if (!isSupabaseConfigured) {
       let purchases = getLocalPurchases();
-      if (filters.search) {
-        const q = filters.search.toLowerCase();
+      if (q) {
         purchases = purchases.filter(
           (p) =>
             (p.purchase_number || '').toLowerCase().includes(q) ||

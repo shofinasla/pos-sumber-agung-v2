@@ -1,50 +1,121 @@
 import { useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { HardHat, Lock, Mail, ArrowRight, AlertCircle, Loader2, Database } from 'lucide-react';
+import {
+  HardHat,
+  Lock,
+  Mail,
+  ArrowRight,
+  AlertCircle,
+  Loader2,
+  User,
+  Phone,
+  Shield,
+  Eye,
+  EyeOff,
+  CheckCircle2,
+  UserPlus,
+  LogIn
+} from 'lucide-react';
 import { useAuth } from '../hooks/useAuth';
-import { isSupabaseConfigured } from '../lib/supabase';
 
 export const Login = () => {
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
+  const [activeTab, setActiveTab] = useState('login'); // 'login' | 'register'
+  
+  // Login form state
+  const [loginEmail, setLoginEmail] = useState('');
+  const [loginPassword, setLoginPassword] = useState('');
+  const [showLoginPassword, setShowLoginPassword] = useState(false);
+
+  // Register form state
+  const [regFullName, setRegFullName] = useState('');
+  const [regEmail, setRegEmail] = useState('');
+  const [regPhone, setRegPhone] = useState('');
+  const [regRole, setRegRole] = useState('CASHIER'); // 'OWNER' | 'CASHIER' | 'ADMIN'
+  const [regPassword, setRegPassword] = useState('');
+  const [regConfirmPassword, setRegConfirmPassword] = useState('');
+  const [showRegPassword, setShowRegPassword] = useState(false);
+
   const [errorMsg, setErrorMsg] = useState('');
+  const [successMsg, setSuccessMsg] = useState('');
   const [loading, setLoading] = useState(false);
 
-  const { login } = useAuth();
+  const { login, register } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
 
   const from = location.state?.from?.pathname || '/dashboard';
 
-  const handleSubmit = async (e) => {
+  const handleLoginSubmit = async (e) => {
     e.preventDefault();
     setErrorMsg('');
+    setSuccessMsg('');
     setLoading(true);
 
     try {
-      const { error } = await login(email, password);
+      const { error } = await login(loginEmail, loginPassword);
       if (error) {
         setErrorMsg(error.message || 'Gagal masuk. Periksa kembali email dan password.');
       } else {
         navigate(from, { replace: true });
       }
     } catch {
-      setErrorMsg('Terjadi kesalahan koneksi/sistem.');
+      setErrorMsg('Terjadi kesalahan sistem saat mencoba masuk.');
     } finally {
       setLoading(false);
     }
   };
 
-  const fillQuickLogin = (demoEmail, demoPassword) => {
-    setEmail(demoEmail);
-    setPassword(demoPassword);
+  const handleRegisterSubmit = async (e) => {
+    e.preventDefault();
+    setErrorMsg('');
+    setSuccessMsg('');
+
+    if (regPassword.length < 6) {
+      setErrorMsg('Kata sandi minimal harus terdiri dari 6 karakter.');
+      return;
+    }
+
+    if (regPassword !== regConfirmPassword) {
+      setErrorMsg('Konfirmasi kata sandi tidak cocok.');
+      return;
+    }
+
+    setLoading(true);
+
+    try {
+      const metadata = {
+        full_name: regFullName,
+        phone: regPhone,
+        role: regRole,
+      };
+
+      const { data, error } = await register(regEmail, regPassword, metadata);
+      if (error) {
+        setErrorMsg(error.message || 'Gagal mendaftarkan akun baru.');
+      } else if (data?.user) {
+        setSuccessMsg('Akun berhasil dibuat! Mengalihkan ke sistem...');
+        setTimeout(() => {
+          navigate(from, { replace: true });
+        }, 1000);
+      }
+    } catch {
+      setErrorMsg('Terjadi kesalahan saat pendaftaran akun.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const switchTab = (tab) => {
+    setActiveTab(tab);
+    setErrorMsg('');
+    setSuccessMsg('');
   };
 
   return (
     <div className="min-h-screen bg-slate-950 flex items-center justify-center p-4 relative overflow-hidden font-sans">
       {/* Background Decorative Accent */}
-      <div className="absolute -top-40 -left-40 w-96 h-96 bg-emerald-500/10 rounded-full blur-3xl" />
-      <div className="absolute -bottom-40 -right-40 w-96 h-96 bg-teal-500/10 rounded-full blur-3xl" />
+      <div className="absolute -top-40 -left-40 w-96 h-96 bg-emerald-500/10 rounded-full blur-3xl pointer-events-none" />
+      <div className="absolute -bottom-40 -right-40 w-96 h-96 bg-teal-500/10 rounded-full blur-3xl pointer-events-none" />
 
       <div className="w-full max-w-md bg-slate-900 border border-slate-800 rounded-3xl shadow-2xl p-6 sm:p-8 space-y-6 relative z-10">
         
@@ -59,15 +130,33 @@ export const Login = () => {
           </p>
         </div>
 
-        {!isSupabaseConfigured && (
-          <div className="p-3 bg-amber-950/50 border border-amber-800/60 rounded-2xl text-amber-300 text-xs flex items-start space-x-2">
-            <Database className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
-            <div>
-              <span className="font-bold block">Mode Demo Aktif:</span>
-              <span>Koneksi Supabase belum dikonfigurasi. Anda dapat masuk langsung menggunakan akun demo di bawah.</span>
-            </div>
-          </div>
-        )}
+        {/* Tab Switcher: Masuk vs Daftar */}
+        <div className="flex bg-slate-950 p-1 rounded-2xl border border-slate-800">
+          <button
+            type="button"
+            onClick={() => switchTab('login')}
+            className={`flex-1 py-2 rounded-xl text-xs font-bold transition flex items-center justify-center space-x-2 ${
+              activeTab === 'login'
+                ? 'bg-emerald-500 text-slate-950 shadow-md'
+                : 'text-slate-400 hover:text-white'
+            }`}
+          >
+            <LogIn className="w-4 h-4" />
+            <span>Masuk</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => switchTab('register')}
+            className={`flex-1 py-2 rounded-xl text-xs font-bold transition flex items-center justify-center space-x-2 ${
+              activeTab === 'register'
+                ? 'bg-emerald-500 text-slate-950 shadow-md'
+                : 'text-slate-400 hover:text-white'
+            }`}
+          >
+            <UserPlus className="w-4 h-4" />
+            <span>Daftar Akun</span>
+          </button>
+        </div>
 
         {/* Error Alert */}
         {errorMsg && (
@@ -77,85 +166,249 @@ export const Login = () => {
           </div>
         )}
 
-        {/* Login Form */}
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <div>
-            <label className="block text-xs font-bold text-slate-300 mb-1">
-              Email Pengguna
-            </label>
-            <div className="relative">
-              <Mail className="w-4 h-4 text-slate-500 absolute left-3.5 top-3.5" />
-              <input
-                type="email"
-                required
-                placeholder="nama@sumberagung.com"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                className="w-full pl-10 pr-4 py-2.5 bg-slate-950 border border-slate-800 rounded-xl text-xs font-medium text-white placeholder-slate-600 focus:outline-none focus:ring-2 focus:ring-emerald-500 transition"
-              />
+        {/* Success Alert */}
+        {successMsg && (
+          <div className="p-3 bg-emerald-950/60 border border-emerald-800/80 rounded-2xl text-emerald-300 text-xs flex items-center space-x-2">
+            <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+            <span>{successMsg}</span>
+          </div>
+        )}
+
+        {/* LOGIN FORM */}
+        {activeTab === 'login' && (
+          <form onSubmit={handleLoginSubmit} className="space-y-4">
+            <div>
+              <label className="block text-xs font-bold text-slate-300 mb-1">
+                Email Pengguna
+              </label>
+              <div className="relative">
+                <Mail className="w-4 h-4 text-slate-500 absolute left-3.5 top-3.5" />
+                <input
+                  type="email"
+                  required
+                  placeholder="nama@sumberagung.com"
+                  value={loginEmail}
+                  onChange={(e) => setLoginEmail(e.target.value)}
+                  className="w-full pl-10 pr-4 py-2.5 bg-slate-950 border border-slate-800 rounded-xl text-xs font-medium text-white placeholder-slate-600 focus:outline-none focus:ring-2 focus:ring-emerald-500 transition"
+                />
+              </div>
             </div>
-          </div>
 
-          <div>
-            <label className="block text-xs font-bold text-slate-300 mb-1">
-              Kata Sandi (Password)
-            </label>
-            <div className="relative">
-              <Lock className="w-4 h-4 text-slate-500 absolute left-3.5 top-3.5" />
-              <input
-                type="password"
-                required
-                placeholder="••••••••"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                className="w-full pl-10 pr-4 py-2.5 bg-slate-950 border border-slate-800 rounded-xl text-xs font-medium text-white placeholder-slate-600 focus:outline-none focus:ring-2 focus:ring-emerald-500 transition"
-              />
+            <div>
+              <label className="block text-xs font-bold text-slate-300 mb-1">
+                Kata Sandi (Password)
+              </label>
+              <div className="relative">
+                <Lock className="w-4 h-4 text-slate-500 absolute left-3.5 top-3.5" />
+                <input
+                  type={showLoginPassword ? 'text' : 'password'}
+                  required
+                  placeholder="••••••••"
+                  value={loginPassword}
+                  onChange={(e) => setLoginPassword(e.target.value)}
+                  className="w-full pl-10 pr-10 py-2.5 bg-slate-950 border border-slate-800 rounded-xl text-xs font-medium text-white placeholder-slate-600 focus:outline-none focus:ring-2 focus:ring-emerald-500 transition"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowLoginPassword(!showLoginPassword)}
+                  className="absolute right-3 top-3 text-slate-500 hover:text-slate-300 focus:outline-none"
+                >
+                  {showLoginPassword ? (
+                    <EyeOff className="w-4 h-4" />
+                  ) : (
+                    <Eye className="w-4 h-4" />
+                  )}
+                </button>
+              </div>
             </div>
-          </div>
 
-          <button
-            type="submit"
-            disabled={loading}
-            className="w-full py-3 bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold rounded-xl text-sm transition shadow-lg shadow-emerald-500/20 flex items-center justify-center space-x-2 disabled:opacity-50 mt-2"
-          >
-            {loading ? (
-              <>
-                <Loader2 className="w-4 h-4 animate-spin" />
-                <span>Proses Masuk...</span>
-              </>
-            ) : (
-              <>
-                <span>Masuk ke Kasir</span>
-                <ArrowRight className="w-4 h-4" />
-              </>
-            )}
-          </button>
-        </form>
-
-        {/* Quick Demo Credentials */}
-        <div className="pt-4 border-t border-slate-800 space-y-2">
-          <span className="text-[11px] text-slate-500 block font-semibold uppercase tracking-wider text-center">
-            Uji Coba Cepat (Akun Demo)
-          </span>
-          <div className="grid grid-cols-2 gap-2">
             <button
-              type="button"
-              onClick={() => fillQuickLogin('admin@sumberagung.com', 'admin123')}
-              className="px-3 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl text-xs font-semibold text-center transition border border-slate-700"
+              type="submit"
+              disabled={loading}
+              className="w-full py-3 bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold rounded-xl text-sm transition shadow-lg shadow-emerald-500/20 flex items-center justify-center space-x-2 disabled:opacity-50 mt-2"
             >
-              Demo Owner
+              {loading ? (
+                <>
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  <span>Proses Masuk...</span>
+                </>
+              ) : (
+                <>
+                  <span>Masuk ke Sistem</span>
+                  <ArrowRight className="w-4 h-4" />
+                </>
+              )}
             </button>
-            <button
-              type="button"
-              onClick={() => fillQuickLogin('kasir@sumberagung.com', 'kasir123')}
-              className="px-3 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl text-xs font-semibold text-center transition border border-slate-700"
-            >
-              Demo Kasir
-            </button>
-          </div>
-        </div>
 
-        <div className="text-center text-[10px] text-slate-600">
+            <div className="text-center pt-2">
+              <p className="text-xs text-slate-400">
+                Belum memiliki akun?{' '}
+                <button
+                  type="button"
+                  onClick={() => switchTab('register')}
+                  className="text-emerald-400 hover:underline font-semibold"
+                >
+                  Daftar Sekarang
+                </button>
+              </p>
+            </div>
+          </form>
+        )}
+
+        {/* REGISTER FORM */}
+        {activeTab === 'register' && (
+          <form onSubmit={handleRegisterSubmit} className="space-y-3.5">
+            <div>
+              <label className="block text-xs font-bold text-slate-300 mb-1">
+                Nama Lengkap
+              </label>
+              <div className="relative">
+                <User className="w-4 h-4 text-slate-500 absolute left-3.5 top-3.5" />
+                <input
+                  type="text"
+                  required
+                  placeholder="Contoh: Budi Santoso"
+                  value={regFullName}
+                  onChange={(e) => setRegFullName(e.target.value)}
+                  className="w-full pl-10 pr-4 py-2.5 bg-slate-950 border border-slate-800 rounded-xl text-xs font-medium text-white placeholder-slate-600 focus:outline-none focus:ring-2 focus:ring-emerald-500 transition"
+                />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div>
+                <label className="block text-xs font-bold text-slate-300 mb-1">
+                  Email
+                </label>
+                <div className="relative">
+                  <Mail className="w-4 h-4 text-slate-500 absolute left-3.5 top-3.5" />
+                  <input
+                    type="email"
+                    required
+                    placeholder="email@toko.com"
+                    value={regEmail}
+                    onChange={(e) => setRegEmail(e.target.value)}
+                    className="w-full pl-10 pr-3 py-2.5 bg-slate-950 border border-slate-800 rounded-xl text-xs font-medium text-white placeholder-slate-600 focus:outline-none focus:ring-2 focus:ring-emerald-500 transition"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-300 mb-1">
+                  No. WhatsApp / HP
+                </label>
+                <div className="relative">
+                  <Phone className="w-4 h-4 text-slate-500 absolute left-3.5 top-3.5" />
+                  <input
+                    type="tel"
+                    placeholder="081234567890"
+                    value={regPhone}
+                    onChange={(e) => setRegPhone(e.target.value)}
+                    className="w-full pl-10 pr-3 py-2.5 bg-slate-950 border border-slate-800 rounded-xl text-xs font-medium text-white placeholder-slate-600 focus:outline-none focus:ring-2 focus:ring-emerald-500 transition"
+                  />
+                </div>
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-xs font-bold text-slate-300 mb-1">
+                Peran / Hak Akses Akun
+              </label>
+              <div className="relative">
+                <Shield className="w-4 h-4 text-slate-500 absolute left-3.5 top-3.5" />
+                <select
+                  value={regRole}
+                  onChange={(e) => setRegRole(e.target.value)}
+                  className="w-full pl-10 pr-4 py-2.5 bg-slate-950 border border-slate-800 rounded-xl text-xs font-medium text-white focus:outline-none focus:ring-2 focus:ring-emerald-500 transition"
+                >
+                  <option value="CASHIER">Kasir (Transaksi & Penjualan)</option>
+                  <option value="OWNER">Pemilik Toko (Akses Penuh & Laporan)</option>
+                  <option value="ADMIN">Admin Gudang (Stok & Pembelian)</option>
+                </select>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div>
+                <label className="block text-xs font-bold text-slate-300 mb-1">
+                  Kata Sandi
+                </label>
+                <div className="relative">
+                  <Lock className="w-4 h-4 text-slate-500 absolute left-3.5 top-3.5" />
+                  <input
+                    type={showRegPassword ? 'text' : 'password'}
+                    required
+                    placeholder="Min 6 karakter"
+                    value={regPassword}
+                    onChange={(e) => setRegPassword(e.target.value)}
+                    className="w-full pl-10 pr-8 py-2.5 bg-slate-950 border border-slate-800 rounded-xl text-xs font-medium text-white placeholder-slate-600 focus:outline-none focus:ring-2 focus:ring-emerald-500 transition"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowRegPassword(!showRegPassword)}
+                    className="absolute right-2.5 top-3 text-slate-500 hover:text-slate-300 focus:outline-none"
+                  >
+                    {showRegPassword ? (
+                      <EyeOff className="w-3.5 h-3.5" />
+                    ) : (
+                      <Eye className="w-3.5 h-3.5" />
+                    )}
+                  </button>
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-300 mb-1">
+                  Ulangi Sandi
+                </label>
+                <div className="relative">
+                  <Lock className="w-4 h-4 text-slate-500 absolute left-3.5 top-3.5" />
+                  <input
+                    type={showRegPassword ? 'text' : 'password'}
+                    required
+                    placeholder="Konfirmasi"
+                    value={regConfirmPassword}
+                    onChange={(e) => setRegConfirmPassword(e.target.value)}
+                    className="w-full pl-10 pr-3 py-2.5 bg-slate-950 border border-slate-800 rounded-xl text-xs font-medium text-white placeholder-slate-600 focus:outline-none focus:ring-2 focus:ring-emerald-500 transition"
+                  />
+                </div>
+              </div>
+            </div>
+
+            <button
+              type="submit"
+              disabled={loading}
+              className="w-full py-3 bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold rounded-xl text-sm transition shadow-lg shadow-emerald-500/20 flex items-center justify-center space-x-2 disabled:opacity-50 mt-3"
+            >
+              {loading ? (
+                <>
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  <span>Mendaftarkan Akun...</span>
+                </>
+              ) : (
+                <>
+                  <span>Daftar & Masuk</span>
+                  <UserPlus className="w-4 h-4" />
+                </>
+              )}
+            </button>
+
+            <div className="text-center pt-2">
+              <p className="text-xs text-slate-400">
+                Sudah memiliki akun?{' '}
+                <button
+                  type="button"
+                  onClick={() => switchTab('login')}
+                  className="text-emerald-400 hover:underline font-semibold"
+                >
+                  Masuk di Sini
+                </button>
+              </p>
+            </div>
+          </form>
+        )}
+
+        <div className="text-center text-[10px] text-slate-600 pt-2">
           POS TB. Sumber Agung © 2026 • Hak Cipta Dilindungi
         </div>
 

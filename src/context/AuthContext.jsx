@@ -59,6 +59,18 @@ export const AuthProvider = ({ children }) => {
     return { data, error };
   };
 
+  const register = async (email, password, metadata) => {
+    setLoading(true);
+    const { data, error } = await authService.signUp(email, password, metadata);
+    if (!error && data?.user) {
+      setUser(data.user);
+      const { data: userProfile } = await authService.getProfile(data.user.id);
+      setProfile(userProfile);
+    }
+    setLoading(false);
+    return { data, error };
+  };
+
   const logout = async () => {
     setLoading(true);
     await authService.signOut();
@@ -74,6 +86,7 @@ export const AuthProvider = ({ children }) => {
         profile,
         loading,
         login,
+        register,
         logout,
         isAuthenticated: !!user,
         role: profile?.role || user?.role || 'CASHIER'

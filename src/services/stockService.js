@@ -1,4 +1,5 @@
 import { supabase, isSupabaseConfigured } from '../lib/supabase';
+import { toSearchString } from '../utils/searchUtils';
 
 const DEMO_PRODUCTS_KEY = 'tb_sa_demo_products';
 const DEMO_MOVEMENTS_KEY = 'tb_sa_demo_stock_movements';
@@ -92,10 +93,12 @@ export const stockService = {
    * Mengambil riwayat pergerakan stok
    */
   async getStockMovements(filters = {}) {
+    const searchStr = typeof filters === 'string' ? toSearchString(filters) : toSearchString(filters?.search);
+    const q = searchStr.toLowerCase();
+
     if (!isSupabaseConfigured) {
       let movs = getLocalMovements();
-      if (filters.search) {
-        const q = filters.search.toLowerCase();
+      if (q) {
         movs = movs.filter((m) =>
           (m.product_name || '').toLowerCase().includes(q) ||
           (m.notes || '').toLowerCase().includes(q)

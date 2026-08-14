@@ -1,11 +1,12 @@
 import { supabase, isSupabaseConfigured } from '../lib/supabase';
 
-const DEMO_USERS_KEY = 'tb_sa_demo_users_list';
+const USERS_KEY = 'tb_sa_registered_users';
 
 const INITIAL_USERS = [
   {
-    id: 'u-1',
+    id: 'user-owner-1',
     email: 'admin@sumberagung.com',
+    password: 'admin123',
     full_name: 'Pemilik Toko (Sumber Agung)',
     role: 'OWNER',
     phone: '08123456789',
@@ -13,8 +14,9 @@ const INITIAL_USERS = [
     created_at: new Date().toISOString(),
   },
   {
-    id: 'u-2',
+    id: 'user-cashier-1',
     email: 'kasir@sumberagung.com',
+    password: 'kasir123',
     full_name: 'Kasir Utama Toko',
     role: 'CASHIER',
     phone: '085711223344',
@@ -24,16 +26,21 @@ const INITIAL_USERS = [
 ];
 
 function getLocalUsers() {
-  const stored = localStorage.getItem(DEMO_USERS_KEY);
+  const stored = localStorage.getItem(USERS_KEY);
   if (stored) {
-    try { return JSON.parse(stored); } catch (e) { console.warn(e); }
+    try {
+      const parsed = JSON.parse(stored);
+      if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+    } catch (e) {
+      console.warn(e);
+    }
   }
-  localStorage.setItem(DEMO_USERS_KEY, JSON.stringify(INITIAL_USERS));
+  localStorage.setItem(USERS_KEY, JSON.stringify(INITIAL_USERS));
   return INITIAL_USERS;
 }
 
 function saveLocalUsers(users) {
-  localStorage.setItem(DEMO_USERS_KEY, JSON.stringify(users));
+  localStorage.setItem(USERS_KEY, JSON.stringify(users));
 }
 
 export const userService = {
@@ -57,6 +64,7 @@ export const userService = {
       const newUser = {
         id: `u-${Date.now()}`,
         email: userData.email,
+        password: userData.password || '123456',
         full_name: userData.full_name,
         role: userData.role || 'CASHIER',
         phone: userData.phone || '',
@@ -110,3 +118,4 @@ export const userService = {
     }
   },
 };
+

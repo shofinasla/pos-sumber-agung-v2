@@ -24,13 +24,14 @@ function saveLocalSuppliers(sups) {
 
 export const supplierService = {
   async getSuppliers(search = '') {
+    const searchStr = toSearchString(search);
+    const q = searchStr.toLowerCase();
     if (!isSupabaseConfigured) {
       let sups = getLocalSuppliers();
-      if (search.trim()) {
-        const q = search.trim().toLowerCase();
+      if (q) {
         sups = sups.filter(
           (s) =>
-            s.name.toLowerCase().includes(q) ||
+            (s.name || '').toLowerCase().includes(q) ||
             (s.contact_person || '').toLowerCase().includes(q) ||
             (s.phone || '').toLowerCase().includes(q)
         );
@@ -40,9 +41,8 @@ export const supplierService = {
 
     try {
       let query = supabase.from('suppliers').select('*').order('name', { ascending: true });
-      if (search.trim()) {
-        const q = search.trim();
-        query = query.or(`name.ilike.%${q}%,contact_person.ilike.%${q}%,phone.ilike.%${q}%`);
+      if (searchStr) {
+        query = query.or(`name.ilike.%${searchStr}%,contact_person.ilike.%${searchStr}%,phone.ilike.%${searchStr}%`);
       }
       const { data, error } = await query;
       if (error) return { data: [], error };
