@@ -1,4 +1,4 @@
-import logoImg from '../../assets/logo.png';
+import logoSvg from '../../assets/logo.svg';
 
 export const Logo = ({ 
   size = 'md', 
@@ -22,10 +22,11 @@ export const Logo = ({
     <div className={`inline-flex items-center gap-3 ${className}`}>
       <div className={`relative ${imageSizeClass} shrink-0 rounded-full overflow-hidden shadow-sm bg-white border border-slate-100 flex items-center justify-center`}>
         <img
-          src={logoImg}
+          src={logoSvg}
           alt="Logo TB. Sumber Agung"
           referrerPolicy="no-referrer"
-          className="w-full h-full object-contain object-center scale-105"
+          className="w-full h-full object-contain object-center"
+          loading="eager"
         />
       </div>
 
