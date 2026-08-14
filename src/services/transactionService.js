@@ -83,6 +83,10 @@ export const transactionService = {
         sales.unshift(newSale);
         saveLocalSales(sales);
 
+        if (typeof window !== 'undefined') {
+          window.dispatchEvent(new CustomEvent('pos_data_updated', { detail: { type: 'sale', data: newSale } }));
+        }
+
         return { data: newSale, error: null };
       } catch (err) {
         return {
@@ -128,6 +132,10 @@ export const transactionService = {
               'Koneksi ke server bermasalah. Transaksi belum disimpan. Silakan periksa koneksi dan coba lagi.',
           },
         };
+      }
+
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('pos_data_updated', { detail: { type: 'sale', data } }));
       }
 
       return { data, error: null };
