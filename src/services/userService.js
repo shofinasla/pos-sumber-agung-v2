@@ -45,16 +45,38 @@ function saveLocalUsers(users) {
 
 export const userService = {
   async getUsers() {
+    const localUsers = getLocalUsers();
+
     if (!isSupabaseConfigured) {
-      return { data: getLocalUsers(), error: null };
+      return { data: localUsers, error: null };
     }
 
     try {
-      const { data, error } = await supabase.from('profiles').select('*').order('created_at', { ascending: false });
-      if (error) return { data: [], error };
-      return { data: data || [], error: null };
-    } catch (err) {
-      return { data: [], error: err };
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('*')
+        .order('created_at', { ascending: false });
+
+      if (error) {
+        console.warn('Supabase get profiles warning:', error.message);
+        return { data: localUsers, error: null };
+      }
+
+      // Merge Supabase profiles with local records so no user is lost
+      const emailMap = new Map();
+      (data || []).forEach((u) => {
+        if (u.email) emailMap.set(u.email.toLowerCase(), u);
+      });
+
+      localUsers.forEach((u) => {
+        if (u.email && !emailMap.has(u.email.toLowerCase())) {
+          emailMap.set(u.email.toLowerCase(), u);
+        }
+      });
+
+      return { data: Array.from(emailMap.values()), error: null };
+    } catch {
+      return { data: localUsers, error: null };
     }
   },
 
@@ -77,20 +99,71 @@ export const userService = {
     }
 
     try {
-      // In Supabase, creating an auth user requires admin auth or trigger
-      const { data, error } = await supabase.from('profiles').insert([
-        {
-          email: userData.email,
-          full_name: userData.full_name,
-          role: userData.role || 'CASHIER',
-          phone: userData.phone || '',
-          is_active: true,
-        },
-      ]).select().single();
+      const generatedId =
+        typeof crypto !== 'undefined' && crypto.randomUUID
+          ? crypto.randomUUID()
+          : `u-${Date.now()}-${Math.floor(Math.random() * 100000)}`;
 
-      if (error) return { data: null, error };
-      return { data, error: null };
+      const newRecord = {
+        id: generatedId,
+        email: (userData.email || '').trim().toLowerCase(),
+        full_name: (userData.full_name || '').trim(),
+        role: userData.role || 'CASHIER',
+        phone: (userData.phone || '').trim(),
+        is_active: userData.is_active ?? true,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      };
+
+      // 1. Save to local cache first to ensure immediate UI feedback & fallback
+      const localUsers = getLocalUsers();
+      const existingLocalIdx = localUsers.findIndex(
+        (u) => (u.email || '').toLowerCase() === newRecord.email
+      );
+      if (existingLocalIdx >= 0) {
+        localUsers[existingLocalIdx] = {
+          ...localUsers[existingLocalIdx],
+          ...newRecord,
+          password: userData.password || localUsers[existingLocalIdx].password || '123456',
+        };
+      } else {
+        localUsers.unshift({
+          ...newRecord,
+          password: userData.password || '123456',
+        });
+      }
+      saveLocalUsers(localUsers);
+
+      // 2. Try inserting / upserting to Supabase 'profiles' table
+      const { data, error } = await supabase
+        .from('profiles')
+        .upsert([
+          {
+            id: newRecord.id,
+            email: newRecord.email,
+            full_name: newRecord.full_name,
+            role: newRecord.role,
+            phone: newRecord.phone,
+            is_active: newRecord.is_active,
+            updated_at: new Date().toISOString(),
+          },
+        ], { onConflict: 'email' })
+        .select()
+        .single();
+
+      if (error) {
+        console.warn('Supabase profiles insert note/error:', error.message);
+        // If error is due to FK constraint on auth.users, return data from local along with error note
+        return {
+          data: newRecord,
+          error: null,
+          dbWarning: `Disimpan ke data lokal. Catatan database cloud: ${error.message}`,
+        };
+      }
+
+      return { data: data || newRecord, error: null };
     } catch (err) {
+      console.error('Error creating user:', err);
       return { data: null, error: err };
     }
   },

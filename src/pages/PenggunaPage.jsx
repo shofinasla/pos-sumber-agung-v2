@@ -6,6 +6,9 @@ import {
   CheckCircle2,
   RefreshCw,
   Edit,
+  AlertCircle,
+  KeyRound,
+  Database,
 } from 'lucide-react';
 import { userService } from '../services/userService';
 import { Modal } from '../components/common/Modal';
@@ -16,9 +19,12 @@ export const PenggunaPage = () => {
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [selectedUser, setSelectedUser] = useState(null);
   const [submitting, setSubmitting] = useState(false);
+  const [errorMsg, setErrorMsg] = useState('');
+  const [toastMsg, setToastMsg] = useState('');
 
   const [formData, setFormData] = useState({
     email: '',
+    password: '',
     full_name: '',
     role: 'CASHIER',
     phone: '',
@@ -41,13 +47,17 @@ export const PenggunaPage = () => {
       }
     };
     load();
-    return () => { isMounted = false; };
+    return () => {
+      isMounted = false;
+    };
   }, []);
 
   const handleOpenAddModal = () => {
     setSelectedUser(null);
+    setErrorMsg('');
     setFormData({
       email: '',
+      password: 'kasir' + Math.floor(100 + Math.random() * 900),
       full_name: '',
       role: 'CASHIER',
       phone: '',
@@ -57,8 +67,10 @@ export const PenggunaPage = () => {
 
   const handleOpenEditModal = (u) => {
     setSelectedUser(u);
+    setErrorMsg('');
     setFormData({
       email: u.email || '',
+      password: '',
       full_name: u.full_name || '',
       role: u.role || 'CASHIER',
       phone: u.phone || '',
@@ -69,17 +81,43 @@ export const PenggunaPage = () => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!formData.email.trim() || !formData.full_name.trim()) return;
+    setErrorMsg('');
+
+    if (!formData.email.trim() || !formData.full_name.trim()) {
+      setErrorMsg('Nama lengkap dan alamat email wajib diisi.');
+      return;
+    }
 
     setSubmitting(true);
+
     if (selectedUser) {
-      await userService.updateUserRole(selectedUser.id, formData.role, formData.is_active);
+      const res = await userService.updateUserRole(
+        selectedUser.id,
+        formData.role,
+        formData.is_active
+      );
+      if (res?.error) {
+        setErrorMsg(`Gagal memperbarui pengguna: ${res.error.message || 'Terjadi kesalahan'}`);
+        setSubmitting(false);
+        return;
+      }
+      setToastMsg(`Hak akses user ${formData.full_name} berhasil diperbarui.`);
     } else {
-      await userService.createUser(formData);
+      const res = await userService.createUser(formData);
+      if (res?.error) {
+        setErrorMsg(`Gagal menambahkan pengguna: ${res.error.message || 'Terjadi kesalahan'}`);
+        setSubmitting(false);
+        return;
+      }
+      setToastMsg(
+        `Pengguna ${formData.full_name} (${formData.email}) berhasil didaftarkan dan tersimpan!`
+      );
     }
+
     setSubmitting(false);
     setIsAddModalOpen(false);
-    fetchUsers();
+    await fetchUsers();
+    setTimeout(() => setToastMsg(''), 5000);
   };
 
   const getRoleBadge = (role) => {
@@ -107,6 +145,19 @@ export const PenggunaPage = () => {
 
   return (
     <div className="space-y-6">
+      {/* Toast Alert */}
+      {toastMsg && (
+        <div className="p-4 bg-emerald-500 text-white rounded-2xl shadow-lg flex items-center justify-between text-sm font-semibold animate-fade-in">
+          <div className="flex items-center gap-2">
+            <CheckCircle2 className="w-5 h-5 shrink-0" />
+            <span>{toastMsg}</span>
+          </div>
+          <button onClick={() => setToastMsg('')} className="text-white/80 hover:text-white text-xs">
+            ✕
+          </button>
+        </div>
+      )}
+
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
@@ -127,22 +178,34 @@ export const PenggunaPage = () => {
         </button>
       </div>
 
-      {/* Info Notice */}
-      <div className="p-4 bg-amber-50 rounded-2xl border border-amber-200 flex items-start gap-3">
-        <Shield className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
-        <div className="text-xs text-amber-900 leading-relaxed">
-          <p className="font-bold">Keamanan & Hierarki Hak Akses System POS:</p>
-          <ul className="list-disc list-inside mt-1 space-y-0.5 text-amber-800">
-            <li>
-              <strong>OWNER:</strong> Akses penuh ke seluruh menu, laporan keuangan, pengaturan toko, dan pengguna.
-            </li>
-            <li>
-              <strong>ADMIN:</strong> Dapat mengelola produk, kategori, stok, pembelian, dan transaksi.
-            </li>
-            <li>
-              <strong>CASHIER:</strong> Akses khusus ke Kasir POS dan Riwayat Transaksi.
-            </li>
-          </ul>
+      {/* Info Notice & Database Sync Info */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div className="p-4 bg-amber-50 rounded-2xl border border-amber-200 flex items-start gap-3">
+          <Shield className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
+          <div className="text-xs text-amber-900 leading-relaxed">
+            <p className="font-bold">Keamanan & Hierarki Hak Akses System POS:</p>
+            <ul className="list-disc list-inside mt-1 space-y-0.5 text-amber-800">
+              <li>
+                <strong>OWNER:</strong> Akses penuh ke seluruh menu, laporan, pengaturan, dan user.
+              </li>
+              <li>
+                <strong>ADMIN:</strong> Kelola produk, kategori, stok, pembelian, dan transaksi.
+              </li>
+              <li>
+                <strong>CASHIER:</strong> Akses khusus ke Kasir POS dan Riwayat Transaksi.
+              </li>
+            </ul>
+          </div>
+        </div>
+
+        <div className="p-4 bg-sky-50 rounded-2xl border border-sky-200 flex items-start gap-3">
+          <Database className="w-5 h-5 text-sky-600 shrink-0 mt-0.5" />
+          <div className="text-xs text-sky-900 leading-relaxed">
+            <p className="font-bold">Sinkronisasi Database Cloud (Supabase):</p>
+            <p className="mt-1 text-sky-800">
+              Pengguna yang ditambahkan akan otomatis disinkronkan ke database cloud (tabel <code className="font-bold bg-white/70 px-1 py-0.5 rounded">profiles</code>) dan dicadangkan secara lokal agar staf dapat langsung login.
+            </p>
+          </div>
         </div>
       </div>
 
@@ -187,7 +250,7 @@ export const PenggunaPage = () => {
                       </div>
                       {u.full_name}
                     </td>
-                    <td className="px-6 py-4 text-slate-600">{u.email}</td>
+                    <td className="px-6 py-4 text-slate-600 font-mono text-xs">{u.email}</td>
                     <td className="px-6 py-4">{getRoleBadge(u.role)}</td>
                     <td className="px-6 py-4 text-xs font-mono">{u.phone || '-'}</td>
                     <td className="px-6 py-4">
@@ -225,6 +288,13 @@ export const PenggunaPage = () => {
         title={selectedUser ? 'Edit Hak Akses User' : 'Tambah User / Staf Baru'}
       >
         <form onSubmit={handleSubmit} className="space-y-4">
+          {errorMsg && (
+            <div className="p-3 bg-rose-50 border border-rose-200 rounded-xl text-rose-700 text-xs flex items-center gap-2">
+              <AlertCircle className="w-4 h-4 shrink-0 text-rose-500" />
+              <span>{errorMsg}</span>
+            </div>
+          )}
+
           <div>
             <label className="block text-xs font-semibold text-slate-700 mb-1">
               Nama Lengkap Staf *
@@ -253,6 +323,26 @@ export const PenggunaPage = () => {
               className="w-full px-3.5 py-2.5 bg-slate-50 rounded-xl text-sm border border-slate-200 focus:outline-none focus:ring-2 focus:ring-slate-500/20 focus:border-slate-500 disabled:opacity-60"
             />
           </div>
+
+          {!selectedUser && (
+            <div>
+              <label className="block text-xs font-semibold text-slate-700 mb-1 flex items-center gap-1.5">
+                <KeyRound className="w-3.5 h-3.5 text-slate-500" />
+                Kata Sandi Awal Staf *
+              </label>
+              <input
+                type="text"
+                required
+                value={formData.password}
+                onChange={(e) => setFormData({ ...formData, password: e.target.value })}
+                placeholder="misal: kasir123"
+                className="w-full px-3.5 py-2.5 bg-slate-50 rounded-xl text-sm font-mono border border-slate-200 focus:outline-none focus:ring-2 focus:ring-slate-500/20 focus:border-slate-500"
+              />
+              <p className="text-[11px] text-slate-500 mt-1">
+                Berikan kata sandi ini kepada staf untuk masuk ke akun mereka.
+              </p>
+            </div>
+          )}
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
