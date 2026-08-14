@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">SUMBER AGUNG V2 POS</string>
+    <string name="title_activity_main">SUMBER AGUNG V2 POS</string>
+    <string name="package_name">com.sumberagungv2.pos</string>
+    <string name="custom_url_scheme">com.sumberagungv2.pos</string>
+</resources>
