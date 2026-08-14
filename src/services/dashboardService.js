@@ -251,53 +251,86 @@ export const dashboardService = {
 
     // SUPABASE CLOUD IMPLEMENTATION
     try {
-      // 1. Fetch Sales
-      const { data: sales, error: salesErr } = await supabase
-        .from('sales')
-        .select(`
-          id,
-          invoice_number,
-          total,
-          subtotal,
-          discount,
-          payment_method,
-          status,
-          created_at,
-          customer:customers(name),
-          sale_items(
-            quantity,
-            cost_price,
-            unit_price,
-            subtotal,
-            product:products(id, name, unit, category:categories(name))
-          )
-        `)
-        .order('created_at', { ascending: false });
+      const localSales = getLocalSales();
 
-      if (salesErr) throw salesErr;
+      // 1. Fetch Sales
+      let cloudSales = [];
+      try {
+        const { data: sales, error: salesErr } = await supabase
+          .from('sales')
+          .select(`
+            id,
+            invoice_number,
+            total,
+            subtotal,
+            discount,
+            payment_method,
+            status,
+            created_at,
+            customer:customers(name),
+            sale_items(
+              quantity,
+              cost_price,
+              unit_price,
+              subtotal,
+              product:products(id, name, unit, category:categories(name))
+            )
+          `)
+          .order('created_at', { ascending: false });
+
+        if (!salesErr && sales) {
+          cloudSales = sales;
+        } else if (salesErr) {
+          console.warn('Supabase dashboard sales fetch error:', salesErr);
+        }
+      } catch (e) {
+        console.warn('Exception fetching sales from supabase:', e);
+      }
+
+      // Merge local sales that might not be in cloud
+      const cloudInvoiceSet = new Set(cloudSales.map((s) => s.invoice_number));
+      const unsyncedSales = localSales.filter((s) => !cloudInvoiceSet.has(s.invoice_number));
+      const allSales = [...unsyncedSales, ...cloudSales];
 
       // 2. Fetch Products
-      const { data: products, error: prodErr } = await supabase
-        .from('products')
-        .select('id, name, sku, stock, minimum_stock, unit, cost_price, selling_price, category:categories(name)')
-        .eq('is_active', true);
+      let products = [];
+      try {
+        const { data: prods, error: prodErr } = await supabase
+          .from('products')
+          .select('id, name, sku, stock, minimum_stock, unit, cost_price, selling_price, category:categories(name)')
+          .eq('is_active', true);
 
-      if (prodErr) throw prodErr;
+        if (!prodErr && prods) {
+          products = prods;
+        } else {
+          products = getLocalProducts();
+        }
+      } catch {
+        products = getLocalProducts();
+      }
 
       // 3. Fetch Piutang & Hutang
-      const { data: piutang } = await debtService.getPiutangList();
-      const { data: hutang } = await debtService.getHutangList();
+      let piutang = [];
+      let hutang = [];
+      try {
+        const { data: piutangData } = await debtService.getPiutangList();
+        const { data: hutangData } = await debtService.getHutangList();
+        piutang = piutangData || getLocalPiutang();
+        hutang = hutangData || getLocalHutang();
+      } catch {
+        piutang = getLocalPiutang();
+        hutang = getLocalHutang();
+      }
 
       let todaySales = 0;
       let todayTxCount = 0;
       let todayTotalCost = 0;
       let yesterdaySales = 0;
-
       const topProductsMap = {};
-      const allSales = sales || [];
 
       const recentTransactions = allSales
         .filter((s) => s.status !== 'VOIDED')
+
         .slice(0, 7)
         .map((s) => ({
           id: s.id,
