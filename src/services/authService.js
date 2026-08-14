@@ -164,6 +164,30 @@ export const authService = {
     return { data, error };
   },
 
+  async resendVerification(email) {
+    const cleanEmail = (email || '').trim().toLowerCase();
+    if (!cleanEmail) {
+      return { data: null, error: new Error('Email wajib diisi.') };
+    }
+
+    if (!isSupabaseConfigured) {
+      return {
+        data: { message: 'Tautan verifikasi telah dikirim ulang ke email Anda (Mode Demo).' },
+        error: null,
+      };
+    }
+
+    try {
+      const { data, error } = await supabase.auth.resend({
+        type: 'signup',
+        email: cleanEmail,
+      });
+      return { data, error };
+    } catch (err) {
+      return { data: null, error: err };
+    }
+  },
+
   async signOut() {
     if (!isSupabaseConfigured) {
       localStorage.removeItem(CURRENT_USER_KEY);
