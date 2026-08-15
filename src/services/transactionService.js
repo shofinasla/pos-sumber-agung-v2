@@ -1,4 +1,5 @@
 import { supabase, isSupabaseConfigured } from '../lib/supabase';
+import { cashService } from './cashService';
 
 const DEMO_SALES_KEY = 'tb_sa_demo_sales';
 const DEMO_PRODUCTS_KEY = 'tb_sa_demo_products';
@@ -137,15 +138,25 @@ export const transactionService = {
     const validCustomerId = isValidUUID(saleData.customerId) ? saleData.customerId : null;
     const validCashierId = isValidUUID(saleData.cashierId) ? saleData.cashierId : null;
 
-    const itemsPayload = saleData.items.map((item) => ({
-      product_id: isValidUUID(item.product_id) ? item.product_id : null,
-      quantity: Number(item.quantity || 1),
-      unit_price: Number(item.selling_price || item.unit_price || 0),
-      cost_price: Number(item.cost_price || 0),
-      discount: Number(item.discount || 0),
-      subtotal: Number(item.subtotal || 0),
-      name: item.name || 'Produk Material',
-    }));
+    const itemsPayload = saleData.items.map((item) => {
+      const rawId = item.product_id || item.id || item.productId || null;
+      const validProdId = isValidUUID(rawId) ? rawId : null;
+      const qty = Number(item.quantity || 1);
+      const unitPrice = Number(item.selling_price || item.unit_price || item.price || 0);
+      const costPrice = Number(item.cost_price || 0);
+      const discount = Number(item.discount || 0);
+      const subtotal = Number(item.subtotal || Math.max(0, (unitPrice - discount) * qty));
+      return {
+        product_id: validProdId,
+        raw_id: rawId,
+        quantity: qty,
+        unit_price: unitPrice,
+        cost_price: costPrice,
+        discount: discount,
+        subtotal: subtotal,
+        name: item.name || 'Produk Material',
+      };
+    });
 
     const generatedInvoice = `TRX-${new Date().toISOString().slice(0, 10).replace(/-/g, '')}-${Math.floor(1000 + Math.random() * 9000)}`;
 
@@ -162,33 +173,55 @@ export const transactionService = {
         p_paid_amount: Number(saleData.paidAmount),
         p_change_amount: Number(saleData.changeAmount || 0),
         p_notes: saleData.notes || null,
-        p_items: itemsPayload.filter((i) => i.product_id !== null),
+        p_items: itemsPayload
+          .filter((i) => i.product_id !== null)
+          .map((i) => ({
+            product_id: i.product_id,
+            quantity: i.quantity,
+            unit_price: i.unit_price,
+            cost_price: i.cost_price,
+            discount: i.discount,
+            subtotal: i.subtotal,
+          })),
       };
 
-      const { data: rpcData, error: rpcError } = await supabase.rpc('process_pos_sale', rpcParams);
+      if (rpcParams.p_items.length > 0) {
+        const { data: rpcData, error: rpcError } = await supabase.rpc('process_pos_sale', rpcParams);
 
-      if (!rpcError && rpcData) {
-        const returnData = {
-          sale_id: rpcData.id || rpcData.sale_id,
-          invoice_number: rpcData.invoice_number || generatedInvoice,
-          total: Number(rpcData.total || saleData.total),
-          paid_amount: Number(rpcData.paid_amount || saleData.paidAmount),
-          change_amount: Number(rpcData.change_amount || saleData.changeAmount || 0),
-          created_at: rpcData.created_at || new Date().toISOString(),
-          customer: saleData.selectedCustomer || null,
-          cashier: { full_name: 'Kasir POS' },
-          success: true,
-        };
+        if (!rpcError && rpcData) {
+          const returnData = {
+            sale_id: rpcData.id || rpcData.sale_id,
+            invoice_number: rpcData.invoice_number || generatedInvoice,
+            total: Number(rpcData.total || saleData.total),
+            paid_amount: Number(rpcData.paid_amount || saleData.paidAmount),
+            change_amount: Number(rpcData.change_amount || saleData.changeAmount || 0),
+            created_at: rpcData.created_at || new Date().toISOString(),
+            customer: saleData.selectedCustomer || null,
+            cashier: { full_name: 'Kasir POS' },
+            success: true,
+          };
 
-        if (typeof window !== 'undefined') {
-          window.dispatchEvent(new CustomEvent('pos_data_updated', { detail: { type: 'sale', data: returnData } }));
+          // Record cash flow if paid in cash
+          if ((saleData.paymentMethod || 'CASH').toUpperCase() === 'CASH') {
+            await cashService.addCashTransaction({
+              type: 'IN',
+              amount: Number(returnData.total),
+              category: 'PENJUALAN',
+              notes: `Penjualan Kasir POS #${returnData.invoice_number}`,
+              cashierId: validCashierId,
+            });
+          }
+
+          if (typeof window !== 'undefined') {
+            window.dispatchEvent(new CustomEvent('pos_data_updated', { detail: { type: 'sale', data: returnData } }));
+          }
+
+          return { data: returnData, error: null };
         }
 
-        return { data: returnData, error: null };
-      }
-
-      if (rpcError) {
-        console.warn('RPC process_pos_sale returned error, switching to direct insert fallback:', rpcError.message || rpcError);
+        if (rpcError) {
+          console.warn('RPC process_pos_sale returned error, switching to direct insert fallback:', rpcError.message || rpcError);
+        }
       }
     } catch (rpcEx) {
       console.warn('Exception during RPC process_pos_sale:', rpcEx);
@@ -237,26 +270,28 @@ export const transactionService = {
         throw directSaleErr;
       }
 
-      // Insert sale items safely
+      // Insert sale items safely into Supabase sale_items table
       if (directSale && itemsPayload.length > 0) {
-        const saleItemsToInsert = itemsPayload
-          .filter((item) => item.product_id !== null)
-          .map((item) => ({
-            sale_id: directSale.id,
-            product_id: item.product_id,
-            quantity: item.quantity,
-            unit_price: item.unit_price,
-            cost_price: item.cost_price,
-            discount: item.discount,
-            subtotal: item.subtotal,
-          }));
+        let saleItemsToInsert = itemsPayload.map((item) => ({
+          sale_id: directSale.id,
+          product_id: item.product_id,
+          quantity: item.quantity,
+          unit_price: item.unit_price,
+          cost_price: item.cost_price,
+          discount: item.discount,
+          subtotal: item.subtotal,
+        }));
 
-        if (saleItemsToInsert.length > 0) {
-          try {
-            await supabase.from('sale_items').insert(saleItemsToInsert);
-          } catch (itemsErr) {
-            console.warn('Sale items insert warning:', itemsErr);
+        try {
+          const { error: itemsErr } = await supabase.from('sale_items').insert(saleItemsToInsert);
+          if (itemsErr) {
+            console.warn('Initial sale_items insert failed (FK mismatch), retrying with sanitized null product IDs:', itemsErr.message);
+            // Retry by setting non-conforming product_id to null so items are never lost
+            const fallbackItems = saleItemsToInsert.map((it) => ({ ...it, product_id: null }));
+            await supabase.from('sale_items').insert(fallbackItems);
           }
+        } catch (itemsEx) {
+          console.warn('Sale items insert exception:', itemsEx);
         }
 
         // Update product stock and record movement
@@ -270,7 +305,8 @@ export const transactionService = {
               .single();
 
             if (prod) {
-              const newStock = Math.max(0, Number(prod.stock || 0) - Number(item.quantity));
+              const currentStock = Number(prod.stock || 0);
+              const newStock = Math.max(0, currentStock - Number(item.quantity));
               await supabase
                 .from('products')
                 .update({ stock: newStock, updated_at: new Date().toISOString() })
@@ -281,7 +317,7 @@ export const transactionService = {
                   product_id: prod.id,
                   movement_type: 'OUT',
                   quantity: Number(item.quantity),
-                  stock_before: Number(prod.stock || 0),
+                  stock_before: currentStock,
                   stock_after: newStock,
                   reference_id: directSale.id,
                   notes: `Penjualan Kasir POS #${generatedInvoice}`,
@@ -292,6 +328,17 @@ export const transactionService = {
             console.warn('Stock update warning for item:', item.product_id, stockErr);
           }
         }
+      }
+
+      // Record cash transaction for Cash payment
+      if ((saleData.paymentMethod || 'CASH').toUpperCase() === 'CASH') {
+        await cashService.addCashTransaction({
+          type: 'IN',
+          amount: Number(directSale.total),
+          category: 'PENJUALAN',
+          notes: `Penjualan Kasir POS #${generatedInvoice}`,
+          cashierId: validCashierId,
+        });
       }
 
       const returnData = {
@@ -509,6 +556,44 @@ export const transactionService = {
     const historyRes = await this.getSalesHistory();
     const list = historyRes.data || [];
     return { data: list.slice(0, limit), error: null };
+  },
+
+  /**
+   * Berlangganan perubahan data penjualan secara real-time antar perangkat
+   */
+  subscribeSales(callback) {
+    if (!isSupabaseConfigured || !supabase) {
+      const handler = (e) => {
+        if (callback && e.detail) callback({ eventType: 'INSERT', new: e.detail });
+      };
+      if (typeof window !== 'undefined') {
+        window.addEventListener('pos_data_updated', handler);
+      }
+      return () => {
+        if (typeof window !== 'undefined') {
+          window.removeEventListener('pos_data_updated', handler);
+        }
+      };
+    }
+
+    try {
+      const channel = supabase
+        .channel('sales-realtime-channel')
+        .on(
+          'postgres_changes',
+          { event: '*', schema: 'public', table: 'sales' },
+          (payload) => {
+            if (callback) callback(payload);
+          }
+        )
+        .subscribe();
+
+      return () => {
+        supabase.removeChannel(channel);
+      };
+    } catch {
+      return () => {};
+    }
   },
 };
 

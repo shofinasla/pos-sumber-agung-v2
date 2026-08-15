@@ -9,9 +9,14 @@ import {
   RotateCcw,
   Sparkles,
   Zap,
+  Table,
+  Copy,
+  Check,
+  Code2,
 } from 'lucide-react';
 import { Modal } from './Modal';
 import {
+  supabase,
   supabaseUrl,
   testSupabaseConnection,
 } from '../../lib/supabase';
@@ -19,6 +24,10 @@ import {
 export const DatabaseStatusModal = ({ isOpen, onClose }) => {
   const [testing, setTesting] = useState(false);
   const [statusResult, setStatusResult] = useState(null);
+  const [tablesStatus, setTablesStatus] = useState([]);
+  const [checkingTables, setCheckingTables] = useState(false);
+  const [copiedSql, setCopiedSql] = useState(false);
+  const [showSqlGuide, setShowSqlGuide] = useState(false);
   const [customUrl, setCustomUrl] = useState(() => {
     if (typeof window !== 'undefined') {
       return localStorage.getItem('tb_sa_custom_supabase_url') || '';
@@ -34,12 +43,53 @@ export const DatabaseStatusModal = ({ isOpen, onClose }) => {
   const [showCustomForm, setShowCustomForm] = useState(false);
   const [saveSuccess, setSaveSuccess] = useState(false);
 
+  const checkTables = async () => {
+    if (!supabase) return;
+    setCheckingTables(true);
+    const tables = [
+      { name: 'sales', label: 'Penjualan Kasir (sales)' },
+      { name: 'sale_items', label: 'Item Penjualan (sale_items)' },
+      { name: 'products', label: 'Katalog Produk (products)' },
+      { name: 'stock_movements', label: 'Mutasi Kartu Stok (stock_movements)' },
+      { name: 'cash_transactions', label: 'Arus Kas Toko (cash_transactions)' },
+      { name: 'purchases', label: 'Faktur Pembelian (purchases)' },
+      { name: 'purchase_items', label: 'Item Pembelian (purchase_items)' },
+      { name: 'customers', label: 'Pelanggan (customers)' },
+      { name: 'suppliers', label: 'Supplier (suppliers)' },
+    ];
+
+    const results = [];
+    for (const t of tables) {
+      try {
+        const { count, error } = await supabase.from(t.name).select('*', { count: 'exact', head: true });
+        results.push({
+          ...t,
+          status: error ? 'error' : 'ok',
+          count: count !== null && count !== undefined ? count : 0,
+          error: error ? error.message : null,
+        });
+      } catch (err) {
+        results.push({
+          ...t,
+          status: 'error',
+          count: 0,
+          error: err?.message || 'Error',
+        });
+      }
+    }
+    setTablesStatus(results);
+    setCheckingTables(false);
+  };
+
   useEffect(() => {
     let isMounted = true;
     if (isOpen) {
       testSupabaseConnection()
         .then((res) => {
-          if (isMounted) setStatusResult(res);
+          if (isMounted) {
+            setStatusResult(res);
+            checkTables();
+          }
         })
         .catch((err) => {
           if (isMounted) {
@@ -62,6 +112,7 @@ export const DatabaseStatusModal = ({ isOpen, onClose }) => {
     try {
       const res = await testSupabaseConnection();
       setStatusResult(res);
+      await checkTables();
     } catch (err) {
       setStatusResult({
         success: false,
@@ -72,6 +123,46 @@ export const DatabaseStatusModal = ({ isOpen, onClose }) => {
     } finally {
       setTesting(false);
     }
+  };
+
+  const sqlFixScript = `-- ==========================================
+-- SCRIPT SINKRONISASI DATABASE TB. SUMBER AGUNG
+-- Jalankan di menu SQL Editor Supabase untuk memastikan
+-- semua tabel dan izin RLS terbuka penuh.
+-- ==========================================
+
+-- 1. Nonaktifkan RLS agar semua tabel dapat diakses & disinkronkan real-time
+ALTER TABLE IF EXISTS public.sales DISABLE ROW LEVEL SECURITY;
+ALTER TABLE IF EXISTS public.sale_items DISABLE ROW LEVEL SECURITY;
+ALTER TABLE IF EXISTS public.products DISABLE ROW LEVEL SECURITY;
+ALTER TABLE IF EXISTS public.categories DISABLE ROW LEVEL SECURITY;
+ALTER TABLE IF EXISTS public.customers DISABLE ROW LEVEL SECURITY;
+ALTER TABLE IF EXISTS public.suppliers DISABLE ROW LEVEL SECURITY;
+ALTER TABLE IF EXISTS public.stock_movements DISABLE ROW LEVEL SECURITY;
+ALTER TABLE IF EXISTS public.purchases DISABLE ROW LEVEL SECURITY;
+ALTER TABLE IF EXISTS public.purchase_items DISABLE ROW LEVEL SECURITY;
+ALTER TABLE IF EXISTS public.cash_transactions DISABLE ROW LEVEL SECURITY;
+
+-- 2. Pastikan tabel cash_transactions memiliki struktur lengkap
+CREATE TABLE IF NOT EXISTS public.cash_transactions (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    type VARCHAR(10) NOT NULL CHECK (type IN ('IN', 'OUT')),
+    amount NUMERIC(15, 2) NOT NULL DEFAULT 0,
+    category VARCHAR(50) DEFAULT 'OPERASIONAL',
+    notes TEXT,
+    cashier_id UUID,
+    created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- 3. Berikan hak akses penuh ke role anon dan authenticated
+GRANT ALL ON ALL TABLES IN SCHEMA public TO anon, authenticated, service_role;
+GRANT ALL ON ALL SEQUENCES IN SCHEMA public TO anon, authenticated, service_role;
+GRANT ALL ON ALL ROUTINES IN SCHEMA public TO anon, authenticated, service_role;`;
+
+  const handleCopySql = () => {
+    navigator.clipboard.writeText(sqlFixScript);
+    setCopiedSql(true);
+    setTimeout(() => setCopiedSql(false), 2500);
   };
 
   const handleSaveCustom = (e) => {
@@ -109,8 +200,8 @@ export const DatabaseStatusModal = ({ isOpen, onClose }) => {
     <Modal
       isOpen={isOpen}
       onClose={onClose}
-      title="Status & Konfigurasi Database Cloud (Supabase)"
-      maxWidth="max-w-xl"
+      title="Status & Sinkronisasi Database Cloud (Supabase)"
+      maxWidth="max-w-2xl"
     >
       <div className="space-y-5">
         {/* Status Card Banner */}
@@ -161,11 +252,11 @@ export const DatabaseStatusModal = ({ isOpen, onClose }) => {
             <button
               type="button"
               onClick={handleManualRefresh}
-              disabled={testing}
-              title="Tes Ulang Koneksi"
+              disabled={testing || checkingTables}
+              title="Tes Ulang Koneksi & Tabel"
               className="p-2 bg-white hover:bg-slate-100 text-slate-700 rounded-xl border border-slate-200 transition shadow-2xs cursor-pointer shrink-0"
             >
-              <RefreshCw className={`w-4 h-4 ${testing ? 'animate-spin text-emerald-600' : ''}`} />
+              <RefreshCw className={`w-4 h-4 ${testing || checkingTables ? 'animate-spin text-emerald-600' : ''}`} />
             </button>
           </div>
 
@@ -190,6 +281,90 @@ export const DatabaseStatusModal = ({ isOpen, onClose }) => {
               </span>
             </div>
           </div>
+        </div>
+
+        {/* Live Table Health Grid */}
+        <div className="p-4 bg-slate-50 border border-slate-200 rounded-2xl space-y-3">
+          <div className="flex items-center justify-between">
+            <h5 className="text-xs font-bold text-slate-800 uppercase tracking-wider flex items-center gap-1.5">
+              <Table className="w-4 h-4 text-emerald-600" />
+              Status Sinkronisasi Tabel Database:
+            </h5>
+            <span className="text-[11px] text-slate-500 font-medium">
+              {tablesStatus.length > 0
+                ? `${tablesStatus.filter((t) => t.status === 'ok').length}/${tablesStatus.length} Tabel Terhubung`
+                : 'Memeriksa tabel...'}
+            </span>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+            {tablesStatus.map((tab) => (
+              <div
+                key={tab.name}
+                className={`p-2.5 rounded-xl border text-xs flex items-center justify-between ${
+                  tab.status === 'ok'
+                    ? 'bg-white border-slate-200/80 text-slate-800'
+                    : 'bg-amber-50 border-amber-200 text-amber-900'
+                }`}
+              >
+                <div className="min-w-0 pr-2">
+                  <span className="font-bold block truncate">{tab.label}</span>
+                  <span className="font-mono text-[10px] text-slate-500 block truncate">
+                    tabel: {tab.name}
+                  </span>
+                </div>
+                <div className="shrink-0 flex items-center gap-1.5">
+                  <span className="px-2 py-0.5 rounded-md bg-slate-100 text-slate-700 font-mono text-[10px] font-bold">
+                    {tab.count} baris
+                  </span>
+                  {tab.status === 'ok' ? (
+                    <span className="w-2 h-2 rounded-full bg-emerald-500 ring-2 ring-emerald-200" title="Tersambung" />
+                  ) : (
+                    <span className="w-2 h-2 rounded-full bg-amber-500 ring-2 ring-amber-200" title={tab.error || 'Perlu SQL RLS Policy'} />
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* SQL Helper Accordion */}
+        <div className="border border-slate-200 rounded-2xl overflow-hidden bg-white">
+          <button
+            type="button"
+            onClick={() => setShowSqlGuide(!showSqlGuide)}
+            className="w-full p-3.5 flex items-center justify-between text-left hover:bg-slate-50 transition cursor-pointer"
+          >
+            <span className="text-xs font-bold text-slate-800 flex items-center gap-2">
+              <Code2 className="w-4 h-4 text-emerald-600" />
+              Script SQL Izin Akses & Sinkronisasi Supabase (Klik untuk Buka)
+            </span>
+            <span className="text-[11px] text-emerald-700 font-bold">
+              {showSqlGuide ? 'Sembunyikan' : 'Buka Script'}
+            </span>
+          </button>
+
+          {showSqlGuide && (
+            <div className="p-4 border-t border-slate-200 bg-slate-900 text-slate-100 space-y-3">
+              <div className="flex items-center justify-between">
+                <p className="text-[11px] text-slate-400">
+                  Salin dan jalankan script ini di menu <strong>SQL Editor</strong> dashboard Supabase Anda jika ingin memastikan semua tabel terbuka tanpa kendala RLS.
+                </p>
+                <button
+                  type="button"
+                  onClick={handleCopySql}
+                  className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold transition flex items-center gap-1.5 shrink-0 shadow-sm cursor-pointer"
+                >
+                  {copiedSql ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
+                  {copiedSql ? 'Tersalin!' : 'Salin Script SQL'}
+                </button>
+              </div>
+
+              <pre className="p-3 bg-slate-950 rounded-xl text-[11px] font-mono text-emerald-400 overflow-x-auto max-h-48 border border-slate-800">
+                {sqlFixScript}
+              </pre>
+            </div>
+          )}
         </div>
 
         {/* Feature Benefits List */}

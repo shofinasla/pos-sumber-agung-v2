@@ -1,5 +1,6 @@
 import { supabase, isSupabaseConfigured } from '../lib/supabase';
 import { toSearchString } from '../utils/searchUtils';
+import { cashService } from './cashService';
 
 const DEMO_PURCHASES_KEY = 'tb_sa_demo_purchases';
 const DEMO_PRODUCTS_KEY = 'tb_sa_demo_products';
@@ -462,6 +463,16 @@ export const purchaseService = {
             console.warn('Error updating purchase item or stock in Supabase:', itemErr);
           }
         }
+      }
+
+      // Record cash transaction if paid immediately
+      if ((purchaseData.paymentStatus || 'PAID') === 'PAID') {
+        await cashService.addCashTransaction({
+          type: 'OUT',
+          amount: totalAmount,
+          category: 'PEMBELIAN',
+          notes: `Pembelian Material Faktur #${purchaseNo}`,
+        });
       }
 
       // Also mirror to local cache
