@@ -1,0 +1,23 @@
+{
+  "short_name": "TB Sumber Agung",
+  "name": "POS TB. Sumber Agung - Sistem Kasir & Toko Bangunan",
+  "description": "Sistem Informasi Point of Sale, Kasir, dan Manajemen Inventaris Toko Bahan Bangunan Sumber Agung",
+  "icons": [
+    {
+      "src": "/logo.svg",
+      "type": "image/svg+xml",
+      "sizes": "192x192 512x512"
+    },
+    {
+      "src": "/favicon.svg",
+      "type": "image/svg+xml",
+      "sizes": "64x64 32x32 24x24 16x16"
+    }
+  ],
+  "start_url": "/",
+  "background_color": "#ffffff",
+  "theme_color": "#2563eb",
+  "display": "standalone",
+  "orientation": "portrait",
+  "scope": "/"
+}
