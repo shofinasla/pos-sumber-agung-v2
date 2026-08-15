@@ -13,6 +13,7 @@ import {
   Sparkles,
   Printer,
   ChevronDown,
+  AlertCircle,
 } from 'lucide-react';
 import { purchaseService } from '../services/purchaseService';
 import { supplierService } from '../services/supplierService';
@@ -31,6 +32,12 @@ export const PembelianPage = () => {
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [filterPayment, setFilterPayment] = useState('ALL'); // 'ALL', 'PAID', 'UNPAID'
+  const [toast, setToast] = useState(null);
+
+  const showToast = (message, type = 'success') => {
+    setToast({ message, type });
+    setTimeout(() => setToast(null), 3500);
+  };
 
   // Create Purchase Modal State
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
@@ -83,8 +90,17 @@ export const PembelianPage = () => {
       }
     };
     load();
+
+    const handleDataUpdate = (e) => {
+      if (e.detail?.type === 'product' || e.detail?.type === 'purchase' || e.detail?.type === 'supplier') {
+        load();
+      }
+    };
+
+    window.addEventListener('pos_data_updated', handleDataUpdate);
     return () => {
       isMounted = false;
+      window.removeEventListener('pos_data_updated', handleDataUpdate);
     };
   }, [search]);
 
@@ -257,7 +273,7 @@ export const PembelianPage = () => {
     const validItems = items.filter((it) => it.productId && Number(it.quantity) > 0);
 
     if (validItems.length === 0) {
-      alert('Pilih minimal 1 material/produk dan pastikan jumlah kulakan lebih dari 0.');
+      showToast('Pilih minimal 1 material/produk dan pastikan jumlah kulakan lebih dari 0.', 'error');
       return;
     }
 
@@ -277,9 +293,10 @@ export const PembelianPage = () => {
     setSubmitting(false);
 
     if (error) {
-      alert('Gagal mencatat pembelian: ' + (error.message || 'Error tidak diketahui'));
+      showToast('Gagal mencatat pembelian: ' + (error.message || 'Error tidak diketahui'), 'error');
     } else {
       setIsCreateModalOpen(false);
+      showToast(`Faktur ${purchaseNumber} berhasil disimpan & stok otomatis bertambah.`);
       fetchData();
     }
   };
@@ -301,6 +318,23 @@ export const PembelianPage = () => {
 
   return (
     <div className="space-y-6">
+      {/* Floating Toast Notification */}
+      {toast && (
+        <div
+          className={`fixed bottom-6 right-6 z-50 px-4 py-3 rounded-2xl shadow-xl border flex items-center gap-3 text-sm font-semibold transition-all duration-300 animate-in fade-in slide-in-from-bottom-5 ${
+            toast.type === 'error'
+              ? 'bg-rose-50 border-rose-200 text-rose-800'
+              : 'bg-emerald-50 border-emerald-200 text-emerald-800'
+          }`}
+        >
+          {toast.type === 'error' ? (
+            <AlertCircle className="w-5 h-5 text-rose-600 shrink-0" />
+          ) : (
+            <CheckCircle2 className="w-5 h-5 text-emerald-600 shrink-0" />
+          )}
+          <span>{toast.message}</span>
+        </div>
+      )}
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
