@@ -125,8 +125,8 @@ export const productService = {
       limit = 10,
       search = '',
       categoryId = '',
-      statusFilter = 'all', // 'all', 'active', 'inactive'
-      stockFilter = 'all',  // 'all', 'available', 'low', 'out_of_stock'
+      statusFilter = options.statusFilter || options.status || 'all', // 'all', 'active', 'inactive'
+      stockFilter = options.stockFilter || options.stock || 'all',  // 'all', 'available', 'low', 'out_of_stock'
     } = options;
 
     const cleanSearch = toSearchString(search);
