@@ -108,6 +108,98 @@ function createLocalPurchaseRecord(purchaseData) {
 }
 
 export const purchaseService = {
+  /**
+   * Realtime subscription for Purchases & Stock changes from Supabase
+   * Triggers callback when Account A or any other user creates/updates purchases or stock
+   */
+  subscribePurchases(callback) {
+    let channel = null;
+    let isSubscribed = true;
+
+    // 1. Supabase Postgres Realtime Channel
+    if (isSupabaseConfigured && supabase) {
+      try {
+        const channelId = `realtime_purchases_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
+        channel = supabase
+          .channel(channelId)
+          .on(
+            'postgres_changes',
+            { event: '*', schema: 'public', table: 'purchases' },
+            (payload) => {
+              if (isSubscribed && typeof callback === 'function') {
+                callback({ source: 'supabase', table: 'purchases', ...payload });
+              }
+            }
+          )
+          .on(
+            'postgres_changes',
+            { event: '*', schema: 'public', table: 'purchase_items' },
+            (payload) => {
+              if (isSubscribed && typeof callback === 'function') {
+                callback({ source: 'supabase', table: 'purchase_items', ...payload });
+              }
+            }
+          )
+          .on(
+            'postgres_changes',
+            { event: '*', schema: 'public', table: 'products' },
+            (payload) => {
+              if (isSubscribed && typeof callback === 'function') {
+                callback({ source: 'supabase', table: 'products', ...payload });
+              }
+            }
+          )
+          .subscribe((status) => {
+            if (status === 'SUBSCRIBED') {
+              console.log('[Supabase Realtime] Pembelian & Stok live channel connected');
+            }
+          });
+      } catch (err) {
+        console.warn('Failed to initialize Supabase Realtime channel for purchases:', err);
+      }
+    }
+
+    // 2. Cross-tab & local custom event listeners
+    const handleLocalEvent = (e) => {
+      if (isSubscribed && typeof callback === 'function') {
+        callback({ source: 'local_event', detail: e.detail });
+      }
+    };
+
+    const handleStorageEvent = (e) => {
+      if (isSubscribed && (e.key === DEMO_PURCHASES_KEY || e.key === 'tb_sa_cross_tab_sync')) {
+        if (typeof callback === 'function') {
+          callback({ source: 'storage_sync', key: e.key });
+        }
+      }
+    };
+
+    if (typeof window !== 'undefined') {
+      window.addEventListener('pos_data_updated', handleLocalEvent);
+      window.addEventListener('storage', handleStorageEvent);
+    }
+
+    // 3. Fallback Polling interval (Every 10 seconds to ensure mobile / multi-device parity)
+    const pollInterval = setInterval(() => {
+      if (isSubscribed && typeof callback === 'function') {
+        callback({ source: 'heartbeat_poll' });
+      }
+    }, 10000);
+
+    // Return cleanup function
+    return () => {
+      isSubscribed = false;
+      clearInterval(pollInterval);
+      if (channel && supabase) {
+        supabase.removeChannel(channel);
+      }
+      if (typeof window !== 'undefined') {
+        window.removeEventListener('pos_data_updated', handleLocalEvent);
+        window.removeEventListener('storage', handleStorageEvent);
+      }
+    };
+  },
+
   async getPurchases(filters = {}) {
     const searchStr = typeof filters === 'string' ? toSearchString(filters) : toSearchString(filters?.search);
     const q = searchStr.toLowerCase();

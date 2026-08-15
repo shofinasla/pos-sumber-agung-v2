@@ -41,7 +41,8 @@ export const StokPage = () => {
 
   useEffect(() => {
     let isMounted = true;
-    const load = async () => {
+    const load = async (showSpinner = true) => {
+      if (showSpinner) setLoading(true);
       const [ovRes, movRes] = await Promise.all([
         stockService.getStockOverview(),
         stockService.getStockMovements({ search, type: typeFilter }),
@@ -52,8 +53,20 @@ export const StokPage = () => {
         setLoading(false);
       }
     };
-    load();
-    return () => { isMounted = false; };
+    load(true);
+
+    const handleUpdate = () => {
+      if (isMounted) load(false);
+    };
+
+    window.addEventListener('pos_data_updated', handleUpdate);
+    window.addEventListener('storage', handleUpdate);
+
+    return () => {
+      isMounted = false;
+      window.removeEventListener('pos_data_updated', handleUpdate);
+      window.removeEventListener('storage', handleUpdate);
+    };
   }, [search, typeFilter]);
 
   const handleOpenAdjustModal = async () => {

@@ -30,13 +30,14 @@ export const PembelianPage = () => {
   const [products, setProducts] = useState([]);
   const [categories, setCategories] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [isSyncing, setIsSyncing] = useState(false);
   const [search, setSearch] = useState('');
   const [filterPayment, setFilterPayment] = useState('ALL'); // 'ALL', 'PAID', 'UNPAID'
   const [toast, setToast] = useState(null);
 
   const showToast = (message, type = 'success') => {
     setToast({ message, type });
-    setTimeout(() => setToast(null), 3500);
+    setTimeout(() => setToast(null), 4000);
   };
 
   // Create Purchase Modal State
@@ -56,53 +57,57 @@ export const PembelianPage = () => {
   // Detail Modal State
   const [detailPurchase, setDetailPurchase] = useState(null);
 
-  const fetchData = useCallback(async () => {
-    setLoading(true);
-    const [purRes, supRes, prodRes, catRes] = await Promise.all([
-      purchaseService.getPurchases({ search }),
-      supplierService.getSuppliers(),
-      productService.getProducts({ limit: 1000, statusFilter: 'all' }),
-      categoryService.getCategories(),
-    ]);
+  const fetchData = useCallback(async (showSpinner = true) => {
+    if (showSpinner) setLoading(true);
+    else setIsSyncing(true);
 
-    setPurchases(purRes.data || []);
-    setSuppliers(supRes.data || []);
-    setProducts(prodRes.data || []);
-    setCategories(catRes.data || []);
-    setLoading(false);
-  }, [search]);
-
-  useEffect(() => {
-    let isMounted = true;
-    const load = async () => {
+    try {
       const [purRes, supRes, prodRes, catRes] = await Promise.all([
         purchaseService.getPurchases({ search }),
         supplierService.getSuppliers(),
         productService.getProducts({ limit: 1000, statusFilter: 'all' }),
         categoryService.getCategories(),
       ]);
-      if (isMounted) {
-        setPurchases(purRes.data || []);
-        setSuppliers(supRes.data || []);
-        setProducts(prodRes.data || []);
-        setCategories(catRes.data || []);
-        setLoading(false);
-      }
-    };
-    load();
 
-    const handleDataUpdate = (e) => {
-      if (e.detail?.type === 'product' || e.detail?.type === 'purchase' || e.detail?.type === 'supplier') {
-        load();
-      }
-    };
+      setPurchases(purRes.data || []);
+      setSuppliers(supRes.data || []);
+      setProducts(prodRes.data || []);
+      setCategories(catRes.data || []);
+    } catch (err) {
+      console.warn('Error fetching purchase data:', err);
+    } finally {
+      setLoading(false);
+      setIsSyncing(false);
+    }
+  }, [search]);
 
-    window.addEventListener('pos_data_updated', handleDataUpdate);
+  useEffect(() => {
+    let isMounted = true;
+
+    const loadInitial = async () => {
+      await fetchData(true);
+    };
+    loadInitial();
+
+    // Subscribe to Realtime Supabase changes across all accounts & devices
+    const unsubscribe = purchaseService.subscribePurchases((payload) => {
+      if (!isMounted) return;
+
+      // When a new purchase was added by another user / account in Supabase
+      if (payload?.table === 'purchases' && payload?.eventType === 'INSERT') {
+        const newNo = payload.new?.purchase_number || 'Baru';
+        showToast(`⚡ Faktur #${newNo} baru saja masuk dari akun lain & tersimpan di Supabase!`, 'success');
+      }
+
+      // Background silent sync
+      fetchData(false);
+    });
+
     return () => {
       isMounted = false;
-      window.removeEventListener('pos_data_updated', handleDataUpdate);
+      unsubscribe();
     };
-  }, [search]);
+  }, [fetchData]);
 
   // Low stock products calculation for one-click restock
   const lowStockProducts = useMemo(() => {
@@ -296,8 +301,8 @@ export const PembelianPage = () => {
       showToast('Gagal mencatat pembelian: ' + (error.message || 'Error tidak diketahui'), 'error');
     } else {
       setIsCreateModalOpen(false);
-      showToast(`Faktur ${purchaseNumber} berhasil disimpan & stok otomatis bertambah.`);
-      fetchData();
+      showToast(`✅ Faktur ${purchaseNumber} berhasil disimpan ke Supabase & tersinkron ke semua akun.`);
+      fetchData(false);
     }
   };
 
@@ -338,15 +343,33 @@ export const PembelianPage = () => {
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-slate-900 tracking-tight flex items-center gap-2.5">
-            <ShoppingCart className="w-7 h-7 text-sky-600" />
-            Pembelian & Kulakan Stok
-          </h1>
+          <div className="flex items-center gap-3">
+            <h1 className="text-2xl font-bold text-slate-900 tracking-tight flex items-center gap-2.5">
+              <ShoppingCart className="w-7 h-7 text-sky-600" />
+              Pembelian & Kulakan Stok
+            </h1>
+            <div className="inline-flex items-center gap-2 px-3 py-1 bg-emerald-50 border border-emerald-200/80 rounded-full text-xs font-semibold text-emerald-700 shadow-2xs">
+              <span className="relative flex h-2 w-2">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+              </span>
+              <span>Realtime Cloud Supabase</span>
+            </div>
+          </div>
           <p className="text-sm text-slate-500 mt-1">
-            Faktur masuk dari distributor, kulakan barang toko bangunan, otomatis tambah stok & update HPP modal.
+            Faktur masuk dari distributor, kulakan barang toko bangunan, otomatis sinkron antar akun & update stok secara realtime.
           </p>
         </div>
         <div className="flex items-center gap-2">
+          <button
+            onClick={() => fetchData(true)}
+            className="inline-flex items-center gap-1.5 px-3.5 py-2.5 bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 font-semibold rounded-2xl transition text-sm shadow-2xs"
+            title="Segarkan data faktur & stok dari Supabase"
+          >
+            <RefreshCw className={`w-4 h-4 text-sky-600 ${loading || isSyncing ? 'animate-spin' : ''}`} />
+            <span className="hidden sm:inline">{isSyncing ? 'Menyinkron...' : 'Sinkron'}</span>
+          </button>
+
           <button
             onClick={handleOpenCreateModal}
             className="inline-flex items-center justify-center gap-2 bg-sky-600 hover:bg-sky-700 text-white font-bold px-4 py-2.5 rounded-2xl transition shadow-xs text-sm"
