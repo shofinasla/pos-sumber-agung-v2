@@ -230,37 +230,37 @@ export const Dashboard = () => {
       </div>
 
       {/* Welcome Banner */}
-      <div className="bg-gradient-to-r from-slate-900 via-slate-800 to-slate-900 text-white p-6 rounded-3xl shadow-lg border border-slate-800 flex flex-col md:flex-row justify-between items-start md:items-center gap-4 relative overflow-hidden">
+      <div className="bg-gradient-to-r from-slate-900 via-slate-800 to-slate-900 text-white p-5 sm:p-6 rounded-3xl shadow-lg border border-slate-800 flex flex-col md:flex-row justify-between items-start md:items-center gap-4 relative overflow-hidden">
         <div className="absolute right-0 top-0 w-80 h-80 bg-rose-500/10 rounded-full blur-3xl pointer-events-none" />
         
-        <div className="flex items-center gap-4 relative z-10">
+        <div className="flex items-center gap-3.5 sm:gap-4 relative z-10">
           <Logo size="lg" className="shrink-0 shadow-md shadow-rose-950/50" />
           <div className="space-y-1">
-            <div className="flex items-center space-x-2 text-rose-400 text-xs font-bold uppercase tracking-wider">
+            <div className="flex items-center space-x-2 text-rose-400 text-xs sm:text-xs font-bold uppercase tracking-wider">
               <span>TB. SUMBER AGUNG POS SYSTEM</span>
             </div>
-            <h2 className="text-xl md:text-2xl font-black">
+            <h2 className="text-lg sm:text-xl md:text-2xl font-black">
               Selamat Datang, {profile?.full_name || user?.email || 'Kasir'}!
             </h2>
-            <p className="text-slate-400 text-xs">
+            <p className="text-slate-400 text-xs sm:text-sm">
               Data transaksi omset kasir, nilai persediaan stok, dan performa keuangan diperbarui secara langsung.
             </p>
           </div>
         </div>
 
-        <div className="flex flex-wrap gap-2 relative z-10">
+        <div className="flex flex-wrap gap-2 relative z-10 w-full sm:w-auto">
           <Link
             to="/stok"
-            className="px-3.5 py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-200 font-semibold rounded-xl text-xs transition border border-slate-700 flex items-center gap-1.5"
+            className="flex-1 sm:flex-none justify-center px-4 py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold rounded-2xl text-xs sm:text-sm transition border border-slate-700 flex items-center gap-1.5 touch-manipulation"
           >
-            <Layers className="w-3.5 h-3.5 text-emerald-400" />
+            <Layers className="w-4 h-4 text-emerald-400" />
             <span>Cek Stok</span>
           </Link>
           <Link
             to="/laporan"
-            className="px-3.5 py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-200 font-semibold rounded-xl text-xs transition border border-slate-700 flex items-center gap-1.5"
+            className="flex-1 sm:flex-none justify-center px-4 py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold rounded-2xl text-xs sm:text-sm transition border border-slate-700 flex items-center gap-1.5 touch-manipulation"
           >
-            <FileSpreadsheet className="w-3.5 h-3.5 text-blue-400" />
+            <FileSpreadsheet className="w-4 h-4 text-blue-400" />
             <span>Laporan Lengkap</span>
           </Link>
         </div>
@@ -279,25 +279,25 @@ export const Dashboard = () => {
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
             
             {/* Penjualan Hari Ini (Omset) */}
-            <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-xs space-y-2 hover:border-emerald-300 transition group">
+            <div className="bg-white p-5 rounded-3xl border border-slate-200 shadow-xs space-y-2 hover:border-emerald-300 transition group">
               <div className="flex justify-between items-center text-slate-500">
-                <span className="text-xs font-semibold uppercase tracking-wider">Penjualan Hari Ini</span>
-                <div className="p-2 bg-emerald-50 rounded-xl text-emerald-600 group-hover:scale-110 transition">
+                <span className="text-xs sm:text-xs font-bold uppercase tracking-wider text-slate-500">Penjualan Hari Ini</span>
+                <div className="p-2.5 bg-emerald-50 rounded-2xl text-emerald-600 group-hover:scale-110 transition">
                   <DollarSign className="w-4 h-4" />
                 </div>
               </div>
-              <h3 className="text-2xl font-black text-slate-900 font-mono tracking-tight">
+              <h3 className="text-2xl sm:text-3xl font-black text-slate-900 font-mono tracking-tight">
                 {formatRupiah(metrics.todaySales)}
               </h3>
-              <div className="flex items-center justify-between text-[11px] pt-1">
+              <div className="flex items-center justify-between text-xs sm:text-xs pt-1">
                 {metrics.salesGrowthPercent >= 0 ? (
                   <span className="text-emerald-600 font-bold flex items-center gap-0.5">
-                    <ArrowUpRight className="w-3.5 h-3.5" />
+                    <ArrowUpRight className="w-4 h-4" />
                     +{metrics.salesGrowthPercent}% vs kemarin
                   </span>
                 ) : (
                   <span className="text-rose-600 font-bold flex items-center gap-0.5">
-                    <ArrowDownRight className="w-3.5 h-3.5" />
+                    <ArrowDownRight className="w-4 h-4" />
                     {metrics.salesGrowthPercent}% vs kemarin
                   </span>
                 )}
@@ -306,54 +306,54 @@ export const Dashboard = () => {
             </div>
 
             {/* Transaksi Selesai Hari Ini */}
-            <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-xs space-y-2 hover:border-blue-300 transition group">
+            <div className="bg-white p-5 rounded-3xl border border-slate-200 shadow-xs space-y-2 hover:border-blue-300 transition group">
               <div className="flex justify-between items-center text-slate-500">
-                <span className="text-xs font-semibold uppercase tracking-wider">Transaksi Hari Ini</span>
-                <div className="p-2 bg-blue-50 rounded-xl text-blue-600 group-hover:scale-110 transition">
+                <span className="text-xs sm:text-xs font-bold uppercase tracking-wider text-slate-500">Transaksi Hari Ini</span>
+                <div className="p-2.5 bg-blue-50 rounded-2xl text-blue-600 group-hover:scale-110 transition">
                   <Receipt className="w-4 h-4" />
                 </div>
               </div>
-              <h3 className="text-2xl font-bold text-slate-900 font-mono">
-                {metrics.todayTxCount} <span className="text-xs text-slate-500 font-sans font-normal">Struk Selesai</span>
+              <h3 className="text-2xl sm:text-3xl font-black text-slate-900 font-mono">
+                {metrics.todayTxCount} <span className="text-xs sm:text-sm text-slate-500 font-sans font-medium">Struk Selesai</span>
               </h3>
-              <p className="text-[11px] text-slate-500 pt-1">
-                Rata-rata keranjang: <span className="font-semibold text-slate-700">{formatRupiah(metrics.averageTicket)}</span>/struk
+              <p className="text-xs sm:text-xs text-slate-500 pt-1">
+                Rata-rata keranjang: <span className="font-bold text-slate-800">{formatRupiah(metrics.averageTicket)}</span>/struk
               </p>
             </div>
 
             {/* Laba Bersih Hari Ini */}
-            <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-xs space-y-2 hover:border-purple-300 transition group">
+            <div className="bg-white p-5 rounded-3xl border border-slate-200 shadow-xs space-y-2 hover:border-purple-300 transition group">
               <div className="flex justify-between items-center text-slate-500">
-                <span className="text-xs font-semibold uppercase tracking-wider">Laba Bersih Hari Ini</span>
-                <div className="p-2 bg-purple-50 rounded-xl text-purple-600 group-hover:scale-110 transition">
+                <span className="text-xs sm:text-xs font-bold uppercase tracking-wider text-slate-500">Laba Bersih Hari Ini</span>
+                <div className="p-2.5 bg-purple-50 rounded-2xl text-purple-600 group-hover:scale-110 transition">
                   <TrendingUp className="w-4 h-4" />
                 </div>
               </div>
-              <h3 className="text-2xl font-bold text-slate-900 font-mono tracking-tight">
+              <h3 className="text-2xl sm:text-3xl font-black text-slate-900 font-mono tracking-tight">
                 {formatRupiah(metrics.todayProfit)}
               </h3>
-              <p className="text-[11px] text-purple-700 font-semibold pt-1">
+              <p className="text-xs sm:text-xs text-purple-700 font-bold pt-1">
                 Margin Laba: <span className="font-mono">{metrics.todayProfitMargin}%</span> dari omset hari ini
               </p>
             </div>
 
             {/* Peringatan Stok Menipis */}
-            <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-xs space-y-2 hover:border-amber-300 transition group">
+            <div className="bg-white p-5 rounded-3xl border border-slate-200 shadow-xs space-y-2 hover:border-amber-300 transition group">
               <div className="flex justify-between items-center text-slate-500">
-                <span className="text-xs font-semibold uppercase tracking-wider">Stok Kritis / Menipis</span>
-                <div className="p-2 bg-amber-50 rounded-xl text-amber-600 group-hover:scale-110 transition">
+                <span className="text-xs sm:text-xs font-bold uppercase tracking-wider text-slate-500">Stok Kritis / Menipis</span>
+                <div className="p-2.5 bg-amber-50 rounded-2xl text-amber-600 group-hover:scale-110 transition">
                   <AlertTriangle className="w-4 h-4" />
                 </div>
               </div>
-              <h3 className="text-2xl font-bold text-slate-900 font-mono">
+              <h3 className="text-2xl sm:text-3xl font-black text-slate-900 font-mono">
                 {metrics.lowStockCount + metrics.outOfStockCount}{' '}
-                <span className="text-xs text-slate-500 font-sans font-normal">
+                <span className="text-xs sm:text-sm text-slate-500 font-sans font-medium">
                   Produk ({metrics.outOfStockCount} Habis)
                 </span>
               </h3>
               <Link
                 to="/stok"
-                className="text-[11px] text-amber-700 hover:text-amber-800 hover:underline font-bold block pt-1"
+                className="text-xs sm:text-xs text-amber-700 hover:text-amber-800 hover:underline font-bold block pt-1"
               >
                 Buka daftar periksa stok →
               </Link>
@@ -363,35 +363,35 @@ export const Dashboard = () => {
 
           {/* Secondary Quick Overview Badges: Inventory Value & Piutang */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <div className="bg-slate-50 p-4 rounded-2xl border border-slate-200 flex items-center justify-between">
-              <div className="space-y-0.5">
-                <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Total Nilai Aset Inventaris</span>
-                <h4 className="text-lg font-black text-slate-900 font-mono">{formatRupiah(metrics.totalInventoryValue)}</h4>
-                <span className="text-[10px] text-slate-500">{metrics.totalProducts} item produk material aktif</span>
+            <div className="bg-slate-50 p-4 sm:p-5 rounded-3xl border border-slate-200 flex items-center justify-between">
+              <div className="space-y-1">
+                <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">Total Nilai Aset Inventaris</span>
+                <h4 className="text-lg sm:text-xl font-black text-slate-900 font-mono">{formatRupiah(metrics.totalInventoryValue)}</h4>
+                <span className="text-xs text-slate-500 font-medium">{metrics.totalProducts} item produk material aktif</span>
               </div>
-              <div className="p-3 bg-emerald-100 text-emerald-800 rounded-xl">
+              <div className="p-3.5 bg-emerald-100 text-emerald-800 rounded-2xl">
                 <Building2 className="w-5 h-5" />
               </div>
             </div>
 
-            <div className="bg-slate-50 p-4 rounded-2xl border border-slate-200 flex items-center justify-between">
-              <div className="space-y-0.5">
-                <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Piutang Pelanggan (Bon)</span>
-                <h4 className="text-lg font-black text-amber-800 font-mono">{formatRupiah(metrics.totalPiutangPending)}</h4>
-                <Link to="/hutang" className="text-[10px] text-amber-700 font-bold hover:underline">
+            <div className="bg-slate-50 p-4 sm:p-5 rounded-3xl border border-slate-200 flex items-center justify-between">
+              <div className="space-y-1">
+                <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">Piutang Pelanggan (Bon)</span>
+                <h4 className="text-lg sm:text-xl font-black text-amber-800 font-mono">{formatRupiah(metrics.totalPiutangPending)}</h4>
+                <Link to="/hutang" className="text-xs text-amber-700 font-bold hover:underline">
                   Kelola Bon Pelanggan →
                 </Link>
               </div>
-              <div className="p-3 bg-amber-100 text-amber-800 rounded-xl">
+              <div className="p-3.5 bg-amber-100 text-amber-800 rounded-2xl">
                 <CreditCard className="w-5 h-5" />
               </div>
             </div>
 
-            <div className="bg-slate-50 p-4 rounded-2xl border border-slate-200 flex items-center justify-between">
-              <div className="space-y-0.5">
-                <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Hutang ke Supplier</span>
-                <h4 className="text-lg font-black text-rose-800 font-mono">{formatRupiah(metrics.totalHutangPending)}</h4>
-                <Link to="/hutang" className="text-[10px] text-rose-700 font-bold hover:underline">
+            <div className="bg-slate-50 p-4 sm:p-5 rounded-3xl border border-slate-200 flex items-center justify-between">
+              <div className="space-y-1">
+                <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">Hutang ke Supplier</span>
+                <h4 className="text-lg sm:text-xl font-black text-rose-800 font-mono">{formatRupiah(metrics.totalHutangPending)}</h4>
+                <Link to="/hutang" className="text-xs text-rose-700 font-bold hover:underline">
                   Kelola Tagihan Supplier →
                 </Link>
               </div>

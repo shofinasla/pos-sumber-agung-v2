@@ -23,6 +23,24 @@
   }
 }
 
+/* Standar Mobile View: Font & Touch Ergonomics */
+@media (max-width: 640px) {
+  html {
+    font-size: 16px;
+    -webkit-text-size-adjust: 100%;
+  }
+
+  /* Standard mobile input font size to avoid iOS zoom and enhance readability */
+  input, select, textarea, button {
+    font-size: 14px;
+  }
+
+  /* Make tap targets comfortable on mobile screens */
+  button, a, input[type="button"], input[type="submit"] {
+    touch-action: manipulation;
+  }
+}
+
 /* Custom scrollbar styling for POS cart & catalog */
 ::-webkit-scrollbar {
   width: 6px;

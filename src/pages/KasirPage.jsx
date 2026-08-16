@@ -90,22 +90,22 @@ export const KasirPage = () => {
 
       {/* Mobile / Tablet Floating Cart Bar (Bottom) */}
       {items.length > 0 && (
-        <div className="lg:hidden fixed bottom-4 left-4 right-4 z-30 bg-slate-900 text-white p-3.5 rounded-3xl shadow-2xl flex items-center justify-between">
+        <div className="lg:hidden fixed bottom-4 left-3 right-3 z-30 bg-slate-900 text-white p-3.5 sm:p-4 rounded-3xl shadow-2xl flex items-center justify-between border border-slate-700/50">
           <div
             onClick={() => setMobileCartOpen(true)}
-            className="flex items-center space-x-3 cursor-pointer"
+            className="flex items-center space-x-3 cursor-pointer touch-manipulation"
           >
             <div className="relative">
-              <ShoppingBag className="w-6 h-6 text-emerald-400" />
-              <span className="absolute -top-1.5 -right-1.5 bg-emerald-500 text-white text-[10px] font-black w-4 h-4 rounded-full flex items-center justify-center">
+              <ShoppingBag className="w-7 h-7 text-emerald-400" />
+              <span className="absolute -top-1.5 -right-1.5 bg-emerald-500 text-slate-950 text-xs font-black w-5 h-5 rounded-full flex items-center justify-center shadow-xs">
                 {itemCount}
               </span>
             </div>
             <div>
-              <p className="text-[10px] text-slate-400 font-bold uppercase">
+              <p className="text-xs text-slate-400 font-bold uppercase tracking-wider">
                 Total Belanja
               </p>
-              <p className="text-sm font-black text-emerald-400">
+              <p className="text-base sm:text-lg font-black text-emerald-400">
                 {formatCurrency(total)}
               </p>
             </div>
@@ -114,13 +114,13 @@ export const KasirPage = () => {
           <div className="flex items-center space-x-2">
             <button
               onClick={() => setMobileCartOpen(true)}
-              className="px-3 py-2 bg-slate-800 hover:bg-slate-700 font-bold text-xs rounded-xl transition-colors"
+              className="px-3.5 py-2.5 bg-slate-800 hover:bg-slate-700 font-bold text-sm rounded-2xl transition-colors touch-manipulation"
             >
               Lihat Cart
             </button>
             <button
               onClick={() => setIsPaymentOpen(true)}
-              className="px-4 py-2 bg-emerald-500 hover:bg-emerald-600 text-slate-950 font-black text-xs rounded-xl flex items-center space-x-1.5 shadow-md"
+              className="px-4 py-2.5 bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-black text-sm rounded-2xl flex items-center space-x-1.5 shadow-md touch-manipulation"
             >
               <CreditCard className="w-4 h-4" />
               <span>Bayar</span>
@@ -134,14 +134,15 @@ export const KasirPage = () => {
         <div className="lg:hidden fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex justify-end">
           <div className="bg-white w-full max-w-md h-full shadow-2xl flex flex-col p-4">
             <div className="flex items-center justify-between pb-3 border-b border-slate-100">
-              <h3 className="font-extrabold text-slate-800 text-sm">
+              <h3 className="font-extrabold text-slate-900 text-base">
                 Keranjang (Mobile)
               </h3>
               <button
                 onClick={() => setMobileCartOpen(false)}
-                className="p-1 text-slate-400 hover:text-slate-600 rounded-lg hover:bg-slate-100"
+                className="p-1.5 text-slate-400 hover:text-slate-600 rounded-xl hover:bg-slate-100 touch-manipulation"
+                aria-label="Tutup Keranjang"
               >
-                <X className="w-5 h-5" />
+                <X className="w-6 h-6" />
               </button>
             </div>
             <div className="flex-1 overflow-hidden pt-2">
