@@ -645,4 +645,48 @@ export const productService = {
       errors,
     };
   },
+
+  /**
+   * Mengosongkan / menghapus semua barcode produk dari database dan cache lokal
+   * agar tidak terjadi deteksi duplikat saat proses import / input ulang
+   */
+  async clearAllBarcodes() {
+    if (!isSupabaseConfigured || !supabase) {
+      const products = getLocalProducts();
+      const updated = products.map((p) => ({ ...p, barcode: null }));
+      saveLocalProducts(updated);
+      return { success: true, count: products.length, error: null };
+    }
+
+    try {
+      // Update semua produk di Supabase agar barcode bernilai null
+      const { data, error } = await supabase
+        .from('products')
+        .update({ barcode: null, updated_at: new Date().toISOString() })
+        .neq('id', '00000000-0000-0000-0000-000000000000')
+        .select('id');
+
+      if (error) {
+        console.warn('Update with select id notice, trying generic update:', error.message);
+        const { error: err2 } = await supabase
+          .from('products')
+          .update({ barcode: null });
+        if (err2) throw err2;
+      }
+
+      // Bersihkan juga cache lokal
+      try {
+        const local = getLocalProducts();
+        const updatedLocal = local.map((p) => ({ ...p, barcode: null }));
+        saveLocalProducts(updatedLocal);
+      } catch {
+        // ignore
+      }
+
+      return { success: true, count: data?.length || 0, error: null };
+    } catch (err) {
+      console.error('Error clearing all barcodes:', err);
+      return { success: false, count: 0, error: err };
+    }
+  },
 };
