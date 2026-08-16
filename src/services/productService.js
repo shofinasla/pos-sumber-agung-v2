@@ -689,4 +689,54 @@ export const productService = {
       return { success: false, count: 0, error: err };
     }
   },
+
+  /**
+   * Mengambil seluruh data produk (bahkan jika > 4000+ item) menggunakan chunked parallel fetching
+   */
+  async fetchAllProducts(columns = 'id, name, sku, barcode, stock, minimum_stock, unit, cost_price, selling_price, is_active, category:categories(id, name)') {
+    if (!isSupabaseConfigured || !supabase) {
+      return getLocalProducts();
+    }
+
+    try {
+      const CHUNK_SIZE = 1000;
+      const { data: firstBatch, count, error } = await supabase
+        .from('products')
+        .select(columns, { count: 'exact' })
+        .order('id', { ascending: true })
+        .range(0, CHUNK_SIZE - 1);
+
+      if (error) throw error;
+      if (!firstBatch) return [];
+
+      let allProducts = [...firstBatch];
+      const totalCount = count || allProducts.length;
+
+      if (totalCount > CHUNK_SIZE) {
+        const batchPromises = [];
+        for (let from = CHUNK_SIZE; from < totalCount; from += CHUNK_SIZE) {
+          const to = Math.min(from + CHUNK_SIZE - 1, totalCount - 1);
+          batchPromises.push(
+            supabase
+              .from('products')
+              .select(columns)
+              .order('id', { ascending: true })
+              .range(from, to)
+          );
+        }
+
+        const results = await Promise.all(batchPromises);
+        results.forEach((res) => {
+          if (res.data && Array.isArray(res.data)) {
+            allProducts = allProducts.concat(res.data);
+          }
+        });
+      }
+
+      return allProducts;
+    } catch (err) {
+      console.warn('Error fetching all products chunked, fallback to local:', err);
+      return getLocalProducts();
+    }
+  },
 };

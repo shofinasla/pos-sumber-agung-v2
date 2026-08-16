@@ -292,20 +292,45 @@ export const dashboardService = {
       const unsyncedSales = localSales.filter((s) => !cloudInvoiceSet.has(s.invoice_number));
       const allSales = [...unsyncedSales, ...cloudSales];
 
-      // 2. Fetch Products
+      // 2. Fetch Products with chunked parallel pagination for > 4000+ items
       let products = [];
       try {
-        const { data: prods, error: prodErr } = await supabase
+        const CHUNK_SIZE = 1000;
+        const { data: firstBatch, count, error: prodErr } = await supabase
           .from('products')
-          .select('id, name, sku, stock, minimum_stock, unit, cost_price, selling_price, category:categories(name)')
-          .eq('is_active', true);
+          .select('id, name, sku, stock, minimum_stock, unit, cost_price, selling_price, category:categories(name)', { count: 'exact' })
+          .eq('is_active', true)
+          .range(0, CHUNK_SIZE - 1);
 
-        if (!prodErr && prods) {
-          products = prods;
+        if (!prodErr && firstBatch) {
+          products = [...firstBatch];
+          const totalCount = count || products.length;
+
+          if (totalCount > CHUNK_SIZE) {
+            const batchPromises = [];
+            for (let from = CHUNK_SIZE; from < totalCount; from += CHUNK_SIZE) {
+              const to = Math.min(from + CHUNK_SIZE - 1, totalCount - 1);
+              batchPromises.push(
+                supabase
+                  .from('products')
+                  .select('id, name, sku, stock, minimum_stock, unit, cost_price, selling_price, category:categories(name)')
+                  .eq('is_active', true)
+                  .range(from, to)
+              );
+            }
+
+            const results = await Promise.all(batchPromises);
+            results.forEach((res) => {
+              if (res.data && Array.isArray(res.data)) {
+                products = products.concat(res.data);
+              }
+            });
+          }
         } else {
           products = getLocalProducts();
         }
-      } catch {
+      } catch (err) {
+        console.warn('Exception in dashboard product fetch, fallback to local:', err);
         products = getLocalProducts();
       }
 

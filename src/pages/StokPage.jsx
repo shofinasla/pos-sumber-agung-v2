@@ -14,6 +14,8 @@ export const StokPage = () => {
   // Adjustment Modal
   const [isAdjustModalOpen, setIsAdjustModalOpen] = useState(false);
   const [productsList, setProductsList] = useState([]);
+  const [modalSearch, setModalSearch] = useState('');
+  const [modalLoading, setModalLoading] = useState(false);
   const [selectedProductId, setSelectedProductId] = useState('');
   const [adjustType, setAdjustType] = useState('IN'); // 'IN' (Tambah) or 'OUT' (Kurang) or 'DAMAGE'
   const [adjustQuantity, setAdjustQuantity] = useState(1);
@@ -70,9 +72,21 @@ export const StokPage = () => {
   }, [search, typeFilter]);
 
   const handleOpenAdjustModal = async () => {
-    const res = await productService.getProducts({ limit: 200, status: 'active' });
-    if (res.data) setProductsList(res.data);
+    setModalSearch('');
+    setSelectedProductId('');
+    setModalLoading(true);
     setIsAdjustModalOpen(true);
+    const res = await productService.getProducts({ limit: 50, status: 'active' });
+    if (res.data) setProductsList(res.data);
+    setModalLoading(false);
+  };
+
+  const handleModalSearchChange = async (val) => {
+    setModalSearch(val);
+    setModalLoading(true);
+    const res = await productService.getProducts({ search: val, limit: 50, status: 'active' });
+    if (res.data) setProductsList(res.data);
+    setModalLoading(false);
   };
 
   const handleAdjustSubmit = async (e) => {
@@ -347,20 +361,39 @@ export const StokPage = () => {
 
             <form onSubmit={handleAdjustSubmit} className="space-y-4 text-xs">
               <div>
-                <label className="block font-bold text-slate-700 mb-1">Pilih Produk Material</label>
+                <label className="block font-bold text-slate-700 mb-1">Cari & Pilih Produk Material</label>
+                <div className="relative mb-2">
+                  <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                  <input
+                    type="text"
+                    value={modalSearch}
+                    onChange={(e) => handleModalSearchChange(e.target.value)}
+                    placeholder="Ketik nama, SKU, atau barcode produk..."
+                    className="w-full pl-9 pr-3 py-2 bg-slate-50 border border-slate-200 rounded-xl font-medium text-slate-900 focus:outline-none focus:ring-2 focus:ring-amber-500"
+                  />
+                  {modalLoading && (
+                    <div className="absolute right-3 top-1/2 -translate-y-1/2">
+                      <RefreshCw className="w-3.5 h-3.5 text-slate-400 animate-spin" />
+                    </div>
+                  )}
+                </div>
+
                 <select
                   required
                   value={selectedProductId}
                   onChange={(e) => setSelectedProductId(e.target.value)}
                   className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl font-medium text-slate-900 focus:outline-none focus:ring-2 focus:ring-amber-500"
                 >
-                  <option value="">-- Pilih Produk --</option>
+                  <option value="">-- Pilih Produk ({productsList.length} ditemukan) --</option>
                   {productsList.map((p) => (
                     <option key={p.id} value={p.id}>
-                      {p.name} (Stok Saat Ini: {p.stock} {p.unit})
+                      {p.name} {p.sku ? `[${p.sku}]` : ''} - (Stok: {p.stock} {p.unit || 'PCS'})
                     </option>
                   ))}
                 </select>
+                {productsList.length === 0 && !modalLoading && (
+                  <p className="text-[11px] text-rose-500 mt-1">Tidak ada produk yang cocok dengan pencarian.</p>
+                )}
               </div>
 
               <div className="grid grid-cols-2 gap-3">

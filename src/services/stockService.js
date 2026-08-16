@@ -30,25 +30,27 @@ function saveLocalMovements(movs) {
 
 export const stockService = {
   /**
-   * Ringkasan statistik stok & inventaris
+   * Ringkasan statistik stok & inventaris akurat untuk seluruh produk (> 4000+ item)
    */
   async getStockOverview() {
-    if (!isSupabaseConfigured) {
+    if (!isSupabaseConfigured || !supabase) {
       const prods = getLocalProducts();
-      const totalProducts = prods.length;
+      let totalProducts = prods.length;
       let lowStock = 0;
       let outOfStock = 0;
       let totalValue = 0;
 
       prods.forEach((p) => {
         const stock = Number(p.stock || 0);
-        const min = Number(p.minimum_stock || 0);
+        const min = Number(p.minimum_stock || 5);
         const price = Number(p.cost_price || p.selling_price || 0);
 
         if (stock <= 0) outOfStock++;
         else if (stock <= min) lowStock++;
 
-        totalValue += stock * price;
+        if (stock > 0) {
+          totalValue += stock * price;
+        }
       });
 
       return {
@@ -58,26 +60,55 @@ export const stockService = {
     }
 
     try {
-      const { data: products, error } = await supabase
+      const CHUNK_SIZE = 1000;
+      // 1. Ambil chunk pertama sekaligus total hitungan seluruh produk di Supabase
+      const { data: firstBatch, count, error } = await supabase
         .from('products')
-        .select('id, stock, minimum_stock, cost_price, selling_price');
+        .select('id, stock, minimum_stock, cost_price, selling_price, is_active', { count: 'exact' })
+        .range(0, CHUNK_SIZE - 1);
 
       if (error) return { data: null, error };
 
-      let totalProducts = products.length;
+      let allProducts = firstBatch || [];
+      const totalCount = count || allProducts.length;
+
+      // 2. Jika produk > 1000 (misal 4000+), tarik seluruh chunk tersisa secara paralel
+      if (totalCount > CHUNK_SIZE) {
+        const batchPromises = [];
+        for (let from = CHUNK_SIZE; from < totalCount; from += CHUNK_SIZE) {
+          const to = Math.min(from + CHUNK_SIZE - 1, totalCount - 1);
+          batchPromises.push(
+            supabase
+              .from('products')
+              .select('id, stock, minimum_stock, cost_price, selling_price, is_active')
+              .range(from, to)
+          );
+        }
+
+        const results = await Promise.all(batchPromises);
+        results.forEach((res) => {
+          if (res.data && Array.isArray(res.data)) {
+            allProducts = allProducts.concat(res.data);
+          }
+        });
+      }
+
+      let totalProducts = totalCount || allProducts.length;
       let lowStock = 0;
       let outOfStock = 0;
       let totalValue = 0;
 
-      products.forEach((p) => {
+      allProducts.forEach((p) => {
         const stock = Number(p.stock || 0);
-        const min = Number(p.minimum_stock || 0);
+        const min = Number(p.minimum_stock || 5);
         const price = Number(p.cost_price || p.selling_price || 0);
 
         if (stock <= 0) outOfStock++;
         else if (stock <= min) lowStock++;
 
-        totalValue += stock * price;
+        if (stock > 0) {
+          totalValue += stock * price;
+        }
       });
 
       return {
@@ -85,6 +116,7 @@ export const stockService = {
         error: null,
       };
     } catch (err) {
+      console.error('Error in getStockOverview:', err);
       return { data: null, error: err };
     }
   },
